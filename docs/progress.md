@@ -6,3 +6,5 @@
 | 2 | modules -> packages | 02 AUG 2026 |
 | 3 | models | 04 AUG 2026 |
 | 4 | frontend | 04 AUG 2026 |
+| 5 | backend  | 05 AUG 2026 |
+| 6 | login UX init, along side JWT setup, and CORS  | 05 AUG 2026 |
