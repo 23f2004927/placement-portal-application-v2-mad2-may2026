@@ -3,7 +3,7 @@ import { login } from '@/services/auth';
 import { useAuth } from '@/stores/auth';
 import { ref } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
-import LoggedView from './LoggedView.vue';
+
 
 const username = ref('') // input from form
 const password = ref('') // input from form
@@ -17,7 +17,7 @@ async function handleSubmit() {
   try {
     console.log('would log in with', username.value, password.value)
     const data = await login(username.value, password.value)   // { access_token, role }
-    auth.setSession(data.access_token, data.role,data.username)
+    auth.setSession(data.access_token, data.role,data.userName)
      router.push('/logged')
   } catch (err) {
 
