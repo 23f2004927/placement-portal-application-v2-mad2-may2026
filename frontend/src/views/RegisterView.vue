@@ -20,6 +20,7 @@ const role = computed(() =>
 )
 
 function setRole(next) {
+  clearFieldErrors()
   router.replace({ name: 'register', params: { role: next } })
 }
 

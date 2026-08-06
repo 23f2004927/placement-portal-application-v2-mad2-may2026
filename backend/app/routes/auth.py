@@ -2,10 +2,27 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import create_access_token
 
 from app.extensions import db,IntegrityError
-from app.models import AccountStatus, Role, Student, User, Branch
+from app.models import AccountStatus, Role, Student, User, Branch,Company
+
 
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
+
+UNIQUE_ERRORS = {
+    "user.userName":       ("userName",    "That username is taken."),
+    "student.email":       ("email",       "That email is already registered."),
+    "student.rollNumber":  ("rollNumber",  "That roll number is already registered."),
+    "student.phoneNumber": ("phoneNumber", "That phone number is already registered."),
+    "company.name":        ("name",        "That company is already registered."),
+    "company.website":        ("website",        "That website is already registered with a company."),
+    "company.hrContactEmail":        ("hrContactEmail",        "That website is already registered with a company."),
+}
+def unique_conflict(exc):
+    text = str(exc.orig)
+    for constraint, (field, msg) in UNIQUE_ERRORS.items():
+        if constraint in text:
+            return {field: msg}
+    return {}
 
 
 @auth_bp.route("/login", methods=["POST"])
@@ -20,8 +37,8 @@ def login():
     if user.blackListed:
         return jsonify(message="Black Listed account"), 403
 
-    if user.accountStatus != AccountStatus.APPROVED:
-        return jsonify(message="Account pending approval"), 403
+    if user.accountStatus != AccountStatus.REJECTED:
+        return jsonify(message="Account pending rejected"), 403
 
     token = create_access_token(
         identity=str(user.id),
@@ -36,25 +53,7 @@ def login():
 @auth_bp.route("/register/student", methods=["POST"])
 def register_student():
 
-    UNIQUE_ERRORS = {
-        "user.userName":       ("userName",    "That username is taken."),
-        "student.email":       ("email",       "That email is already registered."),
-        "student.rollNumber":  ("rollNumber",  "That roll number is already registered."),
-        "student.phoneNumber": ("phoneNumber", "That phone number is already registered."),
-        "company.name":        ("name",        "That company is already registered."),
-        "company.website":        ("website",        "That website is already registered with a company."),
-    }
-
-
     data = request.get_json()
-
-    def unique_conflict(exc):
-        text = str(exc.orig)
-        for constraint, (field, msg) in UNIQUE_ERRORS.items():
-            if constraint in text:
-                return {field: msg}
-        return {}
-
 
     user = User(
         userName=data["userName"],
@@ -99,4 +98,37 @@ def register_student():
 @auth_bp.route("/register/company", methods=["POST"])
 def register_company():
 
-    return jsonify(), 200
+    data = request.get_json()
+
+    user = User(
+        userName=data["userName"],
+        role=Role.COMPANY,
+        accountStatus=AccountStatus.PENDING,
+        blackListed=False,
+    )
+    user.setPassword(data["password"])
+    # expectation: insteadof explicity db querying, we find the errors caused due to unique violations here,
+    # any other unmapped error may occur look into it
+    try:
+        db.session.add(user)
+        db.session.flush()
+        company = Company(
+            userId=user.id,
+            name=data["name"],
+            industry = data["industry"],
+            location = data["location"] if data.get("location") else None,
+            hrContactEmail=data["hrContactEmail"],
+            hrContactName=data["hrContactName"],
+            website=data["website"],
+        )
+        db.session.add(company)
+        db.session.commit()
+    except IntegrityError as e:
+        db.session.rollback()
+        errors = unique_conflict(e)
+        return jsonify(
+               message="Some details are already registered.",
+               errors=errors,
+           ), 409
+
+    return jsonify(message="Registration successful.", userName=user.userName), 201

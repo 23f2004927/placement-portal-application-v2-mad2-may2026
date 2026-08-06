@@ -10,4 +10,5 @@
 | 6 | login UX init, along side JWT setup, and CORS  | 05 AUG 2026 |
 | 7 | landing page  | 05 AUG 2026 |
 | 8 | registration UX , and api endpoint  | 06 AUG 2026 |
-| 9 | student regitration wired with the backend, presentatin of errors,   | 06 AUG 2026 |
+| 9 | student registration wired with the backend, presentatin of errors,   | 06 AUG 2026 |
+| 10| company registration wired with the backend, presentatin of errors,   | 06 AUG 2026 |
