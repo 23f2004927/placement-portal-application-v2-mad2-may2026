@@ -41,15 +41,20 @@ const activeForm   = computed(() => role.value === 'student' ? studentForm : com
 
 const errorMsg = ref('')
 const submitting = ref(false)
+const fieldErrors = reactive({})
 // Frozen at submit time so toggling the role afterwards can't rewrite the message.
 const submittedRole = ref(null)
 
+function clearFieldErrors() {
+  Object.keys(fieldErrors).forEach(k => delete fieldErrors[k])
+}
+
 async function handleSubmit() {
   errorMsg.value = ''
-
+  clearFieldErrors()
   // The one rule HTML5 validation cannot express.
   if (credentials.password !== credentials.confirmPassword) {
-    errorMsg.value = 'Passwords do not match.'
+    fieldErrors.confirmPassword = 'Passwords do not match.'
     return
   }
 
@@ -69,13 +74,15 @@ async function handleSubmit() {
     }
     submittedRole.value = role.value
   } catch (err) {
-    // Surface the backend's own message (e.g. 409 "Username already taken")
-    // instead of flattening every failure into one generic string.
-    errorMsg.value = err.response?.data?.message ?? 'Registration failed. Please try again.'
+    const body = err.response?.data
+    errorMsg.value = body?.message ?? 'Registration failed. Please try again.'
+    Object.assign(fieldErrors, body?.errors ?? {})
   } finally {
     submitting.value = false
   }
 }
+
+
 </script>
 
 <template>
@@ -115,8 +122,8 @@ async function handleSubmit() {
           <!-- Shared account credentials -->
           <BRow class="g-2">
             <BCol md="4">
-              <BFormGroup label="Username" label-for="username">
-                <BFormInput id="username" v-model="credentials.userName" type="text" required />
+              <BFormGroup label="Username" label-for="username" :invalid-feedback="fieldErrors.userName" :state="fieldErrors.userName ? false : null" >
+                <BFormInput id="username" v-model="credentials.userName" type="text" :state="fieldErrors.userName ? false : null"  required />
               </BFormGroup>
             </BCol>
 
@@ -133,12 +140,13 @@ async function handleSubmit() {
             </BCol>
 
             <BCol md="4">
-              <BFormGroup label="Confirm password" label-for="confirm-password">
+              <BFormGroup label="Confirm password" label-for="confirm-password" :state="fieldErrors.confirmPassword ? false : null" :invalid-feedback="fieldErrors.confirmPassword">
                 <BFormInput
                   id="confirm-password"
                   v-model="credentials.confirmPassword"
                   type="password"
                   minlength="8"
+                  :state="fieldErrors.confirmPassword ? false : null"
                   required
                 />
               </BFormGroup>
@@ -148,7 +156,7 @@ async function handleSubmit() {
           <hr class="divider" />
 
           <!-- Role-specific fields: swapped by <component :is>, bound by shared reference -->
-          <component :is="activeFields" :form="activeForm" />
+          <component :is="activeFields" :form="activeForm" :errors="fieldErrors" />
 
           <BButton
             type="submit"

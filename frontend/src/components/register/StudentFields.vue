@@ -7,34 +7,40 @@ import { branches, yearsOfStudy } from '@/config/branches'
   parent and child share the same proxy, so no emit is needed.
   Reassigning `form` itself would break that link and Vue would warn.
 */
-defineProps({
-  form: { type: Object, required: true },
+ const props = defineProps({
+  form:   { type: Object, required: true },
+  errors: { type: Object, default: () => ({}) },
 })
+
+const stateOf = (key) => (props.errors[key] ? false : null)
+
+
 </script>
 
 <template>
   <BRow class="g-2">
     <BCol md="6">
-      <BFormGroup label="Full name" label-for="student-name">
+      <BFormGroup label="Full name" label-for="student-name" >
         <BFormInput id="student-name" v-model="form.name" type="text" required />
       </BFormGroup>
     </BCol>
 
     <BCol md="6">
-      <BFormGroup label="Email" label-for="student-email">
-        <BFormInput id="student-email" v-model="form.email" type="email" required />
+      <BFormGroup label="Email" label-for="student-email"  :state="stateOf('email')" :invalid-feedback="errors.email"  >
+        <BFormInput id="student-email" v-model="form.email" type="email" :state="stateOf('email')" required />
       </BFormGroup>
     </BCol>
 
     <BCol md="4">
       <!-- Column is String(10); pattern keeps the browser from sending anything else. -->
-      <BFormGroup label="Phone number" label-for="student-phone">
+      <BFormGroup label="Phone number" label-for="student-phone" :state="stateOf('phoneNumber')" :invalid-feedback="errors.phoneNumber" >
         <BFormInput
           id="student-phone"
           v-model="form.phoneNumber"
           type="tel"
           pattern="[0-9]{10}"
           maxlength="10"
+          :state="stateOf('phoneNumber')"
           placeholder="10 digits"
           required
         />
@@ -42,8 +48,9 @@ defineProps({
     </BCol>
 
     <BCol md="4">
-      <BFormGroup label="Roll number" label-for="student-roll">
-        <BFormInput id="student-roll" v-model="form.rollNumber" type="text" required />
+      <BFormGroup label="Roll number" label-for="student-roll"  :state="stateOf('rollNumber')"
+          :invalid-feedback="errors.rollNumber" >
+        <BFormInput id="student-roll" v-model="form.rollNumber" type="text"  :state="stateOf('rollNumber')"  required />
       </BFormGroup>
     </BCol>
 
