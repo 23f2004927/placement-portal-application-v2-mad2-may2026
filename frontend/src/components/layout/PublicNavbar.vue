@@ -1,5 +1,4 @@
 <script setup>
-import { computed } from 'vue'
 import { useAuth } from '@/stores/auth'
 
 /*
@@ -25,17 +24,6 @@ const items = [
   { key: 'contact', label: 'Contact' },
 ]
 
-/*
-  Local role → landing route map. Move this to the auth store as a `homeRoute`
-  computed once the dashboards exist — the router guard and LoginView need the
-  same mapping, and three copies will drift.
-*/
-const homeRoute = computed(() => {
-  if (auth.role === 'admin') return '/admin'
-  if (auth.role === 'company') return '/company'
-  if (auth.role === 'student') return '/student'
-  return '/login'
-})
 </script>
 
 <template>
@@ -69,7 +57,7 @@ const homeRoute = computed(() => {
           Sign in
         </button>
 
-        <BButton v-else :to="homeRoute" variant="primary" size="sm">Dashboard</BButton>
+        <BButton v-else :to="auth.homeRoute" variant="primary" size="sm">Dashboard</BButton>
       </nav>
     </div>
   </header>

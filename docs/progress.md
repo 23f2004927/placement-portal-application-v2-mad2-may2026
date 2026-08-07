@@ -12,3 +12,4 @@
 | 8 | registration UX , and api endpoint  | 06 AUG 2026 |
 | 9 | student registration wired with the backend, presentatin of errors,   | 06 AUG 2026 |
 | 10| company registration wired with the backend, presentatin of errors,   | 06 AUG 2026 |
+| 11| Common dashboard  , sidebar and filter,  views scaffolded, along with notfound view  | 07 AUG 2026 |
