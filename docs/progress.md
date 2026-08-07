@@ -18,4 +18,5 @@
 | 14| defined the routes , and conditions  | 07 AUG 2026 |
 | 15| layedout the mechanism for the apis data flow  | 07 AUG 2026 |
 | 16| wired the apis to the backendd, build jwt reliant, decorators    | 07 AUG 2026 |
-| 17| added stats api, to be wired to charts later,  | 07 AUG 2026 |
+| 17| add profile view, added stats api, to be wired to charts later,  | 07 AUG 2026 |
+| 18| add profile view, added stats api, to be wired to charts later,  | 07 AUG 2026 |
