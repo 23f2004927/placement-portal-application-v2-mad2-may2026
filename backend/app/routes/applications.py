@@ -1,0 +1,194 @@
+# 7 aug 26
+# Christiano Fernandes
+# applications.py
+# /api/applications — one resource, scoped three ways by JWT claim
+
+
+from datetime import datetime
+
+from flask import Blueprint, jsonify, request
+from flask_jwt_extended import jwt_required
+from sqlalchemy.orm import joinedload
+
+from app.extensions import IntegrityError, db
+from app.models import Application, ApplicationStatus, Drive, DriveStatus
+from app.policies import (
+    HIDDEN_FROM_COMPANY,
+    can_revoke,
+    can_set_status,
+    capabilities_for,
+)
+from app.serializers import serialize_application
+from app.utils.decorators import role_required
+from app.utils.identity import current_company, current_role, current_student
+
+# url_prefix stops at /api so every rule can carry a leading slash. A blueprint
+# prefix of /api/applications plus a route of "/" would produce a trailing-slash
+# URL and a 308 redirect on every call, which breaks the CORS preflight.
+applications_bp = Blueprint("applications", __name__, url_prefix="/api")
+
+
+def _load_owned(application_id, role):
+    """Fetch an application the caller is allowed to touch, else None.
+
+    Returns None rather than raising so callers answer 404 — a 403 would confirm
+    that the id exists.
+    """
+    application = db.session.get(Application, application_id)
+    if application is None:
+        return None
+
+    if role == "admin":
+        return application
+
+    if role == "student":
+        student = current_student()
+        if student is None or application.studentId != student.id:
+            return None
+        return application
+
+    if role == "company":
+        company = current_company()
+        if company is None or application.drive.companyId != company.id:
+            return None
+        if application.status in HIDDEN_FROM_COMPANY:
+            return None
+        return application
+
+    return None
+
+
+@applications_bp.route("/applications", methods=["GET"])
+@jwt_required()
+def list_applications():
+    """No role_required — all three roles may call this. The scoping IS the
+    authorization, which is why the else-branch below is explicit: an unknown
+    role must not fall through to an unfiltered query."""
+    role = current_role()
+
+    query = Application.query.options(
+        joinedload(Application.drive).joinedload(Drive.company),
+        joinedload(Application.student),
+    )
+
+    if role == "student":
+        student = current_student()
+        if student is None:
+            return jsonify(message="No student profile for this account."), 403
+        query = query.filter(Application.studentId == student.id)
+
+    elif role == "company":
+        company = current_company()
+        if company is None:
+            return jsonify(message="No company profile for this account."), 403
+        # An Application has no companyId — ownership runs through Drive.
+        query = query.join(Application.drive).filter(
+            Drive.companyId == company.id,
+            Application.status.notin_(HIDDEN_FROM_COMPANY),
+        )
+
+    elif role != "admin":
+        return jsonify(message="Forbidden"), 403
+
+    applications = query.order_by(Application.appliedAt.desc()).all()
+
+    return jsonify(
+        items=[serialize_application(a, role) for a in applications],
+        capabilities=capabilities_for(role),
+    ), 200
+
+
+@applications_bp.route("/applications", methods=["POST"])
+@role_required("student")
+def create_application():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not data.get("driveId"):
+        return jsonify(message="driveId is required."), 400
+
+    student = current_student()
+    if student is None:
+        return jsonify(message="No student profile for this account."), 403
+
+    drive = db.session.get(Drive, data["driveId"])
+    # Unapproved drives are invisible to students, so "not approved" is a 404.
+    if drive is None or drive.status != DriveStatus.APPROVED:
+        return jsonify(message="That drive is not open for applications."), 404
+
+    application = Application(
+        studentId=student.id,
+        driveId=drive.id,
+        status=ApplicationStatus.APPLIED,
+    )
+
+    try:
+        db.session.add(application)
+        db.session.commit()
+    except IntegrityError:
+        # The UniqueConstraint on (studentId, driveId) is the real guard against
+        # double-applying — and against re-applying after a revoke, since the
+        # revoked row is kept rather than deleted.
+        db.session.rollback()
+        return jsonify(message="You have already applied to this drive."), 409
+
+    return jsonify(serialize_application(application, "student")), 201
+
+
+@applications_bp.route("/applications/<int:application_id>/revoke", methods=["POST"])
+@jwt_required()
+def revoke_application(application_id):
+    role = current_role()
+    application = _load_owned(application_id, role)
+    if application is None:
+        return jsonify(message="Application not found."), 404
+
+    if not can_revoke(application, role):
+        return jsonify(message="This application can no longer be withdrawn."), 409
+
+    application.status = ApplicationStatus.REVOKED
+    db.session.commit()
+
+    return jsonify(serialize_application(application, role)), 200
+
+
+@applications_bp.route("/applications/<int:application_id>", methods=["PATCH"])
+@jwt_required()
+def update_application(application_id):
+    role = current_role()
+    if role not in ("company", "admin"):
+        return jsonify(message="Forbidden"), 403
+
+    application = _load_owned(application_id, role)
+    if application is None:
+        return jsonify(message="Application not found."), 404
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify(message="Invalid request body."), 400
+
+    if "status" in data:
+        try:
+            new_status = ApplicationStatus(data["status"])
+        except ValueError:
+            return jsonify(message="Unknown status."), 400
+
+        if not can_set_status(application, role, new_status):
+            return jsonify(message="That status change is not allowed."), 409
+
+        application.status = new_status
+
+    if "feedback" in data:
+        application.feedback = (data["feedback"] or "").strip() or None
+
+    if "interviewScheduledAt" in data:
+        raw = data["interviewScheduledAt"]
+        if not raw:
+            application.interviewScheduledAt = None
+        else:
+            try:
+                application.interviewScheduledAt = datetime.fromisoformat(raw)
+            except (TypeError, ValueError):
+                return jsonify(message="Invalid interview date."), 400
+
+    db.session.commit()
+
+    return jsonify(serialize_application(application, role)), 200

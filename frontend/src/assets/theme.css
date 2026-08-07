@@ -24,6 +24,9 @@
   --primary-soft: #ecebf9;
 
   --radius: 0px;
+
+  /* limitwidth */
+  --app-max: 2160px;
 }
 
 html {
@@ -35,11 +38,30 @@ body {
   color: var(--text);
 }
 
+#app {
+  max-width: var(--app-max);
+  margin-inline: auto;
+}
+
+/* Once the cap bites, a hairline keeps the app reading as a deliberate frame
+   rather than content that failed to fill the screen. */
+@media (min-width: 1441px) {
+  #app {
+    border-inline: 1px solid var(--border);
+  }
+}
+
 /* Cards */
 
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* Badges — square like everything else; Bootstrap defaults to a rounded pill. */
+
+.badge {
   border-radius: var(--radius);
 }
 
@@ -83,6 +105,35 @@ body {
 .btn:focus,
 .btn:active {
   box-shadow: 0 0 0 1px var(--primary) !important;
+}
+
+/* Bootstrap's size and link modifiers have the SAME specificity as the .btn rule
+   above, so they only win by coming later in the file. Without these, the
+   12px/24px padding written for form buttons applies to every inline row action. */
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 0.8125rem;
+}
+
+.btn-link {
+  padding: 0 8px;
+  border: 0;
+  color: var(--primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+.btn-link:hover {
+  color: var(--primary-hover);
+  text-decoration: underline;
+}
+
+.btn-link:disabled {
+  color: var(--text-muted);
 }
 
 /* Inputs */

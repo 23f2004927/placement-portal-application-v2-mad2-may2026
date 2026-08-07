@@ -2,27 +2,12 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import create_access_token
 
 from app.extensions import db,IntegrityError
+from app.utils.errors import unique_conflict
 from app.models import AccountStatus, Role, Student, User, Branch,Company
 
 
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
-
-UNIQUE_ERRORS = {
-    "user.userName":       ("userName",    "That username is taken."),
-    "student.email":       ("email",       "That email is already registered."),
-    "student.rollNumber":  ("rollNumber",  "That roll number is already registered."),
-    "student.phoneNumber": ("phoneNumber", "That phone number is already registered."),
-    "company.name":        ("name",        "That company is already registered."),
-    "company.website":        ("website",        "That website is already registered with a company."),
-    "company.hrContactEmail":        ("hrContactEmail",        "That website is already registered with a company."),
-}
-def unique_conflict(exc):
-    text = str(exc.orig)
-    for constraint, (field, msg) in UNIQUE_ERRORS.items():
-        if constraint in text:
-            return {field: msg}
-    return {}
 
 
 @auth_bp.route("/login", methods=["POST"])
@@ -37,7 +22,7 @@ def login():
     if user.blackListed:
         return jsonify(message="Black Listed account"), 403
 
-    if user.accountStatus != AccountStatus.REJECTED:
+    if user.accountStatus == AccountStatus.REJECTED:
         return jsonify(message="Account pending rejected"), 403
 
     token = create_access_token(

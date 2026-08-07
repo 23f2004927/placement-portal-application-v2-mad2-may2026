@@ -16,6 +16,10 @@ class ApplicationStatus(enum.Enum):
     OFFER = "offer"
     REJECTED = "rejected"
     PLACED = "placed"
+    # Withdrawn by the student (or revoked by an admin). The row is kept rather
+    # than deleted so the UniqueConstraint below still blocks re-application;
+    # companies never see these.
+    REVOKED = "revoked"
 
 
 class Application(db.Model):
