@@ -14,8 +14,8 @@ async function handleSubmit() {
   errorMsg.value = ''
   const auth = useAuth()
   try {
-    const data = await login(username.value, password.value)   // { access_token, role, userName }
-    auth.setSession(data.access_token, data.role, data.userName)
+    const data = await login(username.value, password.value)
+    auth.setSession(data.access_token, data.role, data.userName, data.accountStatus)
     router.push(auth.homeRoute)
   } catch (err) {
     errorMsg.value = err.response?.data?.message ?? 'Invalid username or password'

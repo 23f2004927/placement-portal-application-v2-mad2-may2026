@@ -12,14 +12,15 @@ import { computed, unref } from 'vue'
   This is a UI hint. Every action endpoint re-checks role, ownership and status
   server-side, because a client can call it without ever reading this.
 */
-export function useCapabilities(source) {
+export function useCapabilities(source, statusKey = 'status') {
   const capabilities = computed(() => unref(source) ?? {})
 
+  // statusKey exists because account rows carry `accountStatus`, not `status`.
   function can(action, row) {
     const rule = capabilities.value[action]
     if (!rule) return false
     if (!rule.allowedFrom) return true
-    return rule.allowedFrom.includes(row?.status)
+    return rule.allowedFrom.includes(row?.[statusKey])
   }
 
   function optionsFor(action) {

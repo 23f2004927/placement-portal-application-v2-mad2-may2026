@@ -178,8 +178,11 @@ def get_drive(drive_id):
     return jsonify(serialize_drive(drive, role, set())), 200
 
 
+# approved=True is the real gate on a pending company, and this is the only
+# place one can be applied: every other company write requires owning a drive,
+# which a company that has never been approved cannot have.
 @drives_bp.route("/drives", methods=["POST"])
-@role_required("company")
+@role_required("company", approved=True)
 def create_drive():
     company = current_company()
     if company is None:

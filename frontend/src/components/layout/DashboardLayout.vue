@@ -1,11 +1,17 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import Sidebar from '@/components/layout/Sidebar.vue'
 import FilterBar from '@/components/layout/FilterBar.vue'
+import { useAuth } from '@/stores/auth'
 
 const route = useRoute()
+const auth = useAuth()
 
+// Once per dashboard mount, not per navigation: re-reads role and accountStatus
+// so a company approved mid-session stops seeing the restricted UI on reload,
+// without having to log out. Never awaited — the layout must not block on it.
+onMounted(() => auth.refresh())
 
 const pinned = ref(localStorage.getItem('sidebarPinned') === '1')
 

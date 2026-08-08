@@ -1,9 +1,11 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import create_access_token
+from flask_jwt_extended import jwt_required
 
 from app.extensions import db,IntegrityError
 from app.utils.errors import unique_conflict
 from app.models import AccountStatus, Role, Student, User, Branch,Company
+from app.utils.identity import current_user_id
 
 
 
@@ -23,15 +25,43 @@ def login():
         return jsonify(message="Black Listed account"), 403
 
     if user.accountStatus == AccountStatus.REJECTED:
-        return jsonify(message="Account pending rejected"), 403
+        return jsonify(message="Account rejected"), 403
 
+    # PENDING is deliberately allowed through: a company awaiting review may sign
+    # in and look around. What it may not do is write — see role_required(approved=True).
     token = create_access_token(
         identity=str(user.id),
         additional_claims={"role": user.role.value, "username": user.userName},
     )
 
+    # accountStatus rides along so the SPA can gate its UI with no second request.
+    # A hint only: it is NOT a token claim, and every write re-reads the live row.
     return jsonify(
-        access_token=token, role=user.role.value, userName=user.userName
+        access_token=token,
+        role=user.role.value,
+        userName=user.userName,
+        accountStatus=user.accountStatus.value,
+    ), 200
+
+
+@auth_bp.route("/me", methods=["GET"])
+@jwt_required()
+def me():
+    """Refreshes what the SPA cached at login.
+
+    Needed because JWT claims are frozen at issue time: a company approved
+    mid-session would otherwise keep seeing the restricted UI until it logged
+    out. Called once per dashboard mount, not once per navigation.
+    """
+    user = db.session.get(User, current_user_id())
+    if user is None:
+        return jsonify(message="Account no longer exists."), 404
+
+    return jsonify(
+        userName=user.userName,
+        role=user.role.value,
+        accountStatus=user.accountStatus.value,
+        blackListed=user.blackListed,
     ), 200
 
 

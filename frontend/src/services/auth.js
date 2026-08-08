@@ -2,8 +2,21 @@ import api from './api'
 
 export async function login(userName, password) {
   const res = await api.post('/auth/login', { userName, password })
-  return res.data   // { access_token, role, userName }
+  return res.data   // { access_token, role, userName, accountStatus }
 }
+
+/*
+  Re-reads role and accountStatus from the server. JWT claims are frozen at issue
+  time, so a company approved mid-session would keep seeing the restricted UI
+  until it logged out. Called once when the dashboard mounts, not per navigation.
+*/
+export async function fetchMe() {
+  const res = await api.get('/auth/me')
+  return res.data   // { userName, role, accountStatus, blackListed }
+}
+
+
+
 
 /*
   Two endpoints rather than one, because the two paths differ in ways that make a

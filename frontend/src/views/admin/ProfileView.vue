@@ -1,47 +1,69 @@
 <script setup>
-import PendingNotice from '@/components/common/PendingNotice.vue'
-import { useAuth } from '@/stores/auth'
+import { ref, onMounted } from 'vue'
+import StatusBadge from '@/components/common/StatusBadge.vue'
+import { fetchMe } from '@/services/auth'
 
-const auth = useAuth()
+const me = ref({ userName: '', role: '', accountStatus: '' })
+const errorMsg = ref('')
+
+onMounted(async () => {
+  try {
+    me.value = await fetchMe()
+  } catch (err) {
+    errorMsg.value = err.response?.data?.message ?? 'Could not load your account.'
+  }
+})
 </script>
 
 <template>
   <div>
-    <PendingNotice endpoint="GET /api/auth/me" />
+    <div class="profile-form">
+      <BAlert v-if="errorMsg" :model-value="true" variant="danger">{{ errorMsg }}</BAlert>
 
-    <div class="profile-card">
-      <div class="field">
-        <span class="field-label">Username</span>
-        <span class="field-value">{{ auth.userName }}</span>
-      </div>
-      <div class="field">
-        <span class="field-label">Role</span>
-        <span class="field-value">{{ auth.role }}</span>
-      </div>
+      <p class="section-label">Account</p>
+      <BRow class="g-2 align-items-end">
+        <BCol md="5">
+          <BFormGroup label="Username">
+            <BFormInput :model-value="me.userName" disabled />
+          </BFormGroup>
+        </BCol>
+        <BCol md="4">
+          <BFormGroup label="Role">
+            <BFormInput :model-value="me.role" disabled />
+          </BFormGroup>
+        </BCol>
+        <BCol md="3">
+          <BFormGroup label="Approval">
+            <StatusBadge :status="me.accountStatus || 'approved'" />
+          </BFormGroup>
+        </BCol>
+      </BRow>
+
+      <hr class="divider" />
+      <p class="note">
+        Administrator accounts are provisioned during setup, so there is nothing here to edit.
+      </p>
     </div>
   </div>
 </template>
 
 <style scoped>
-.profile-card {
-  max-width: 480px;
+.profile-form {
+  max-width: 900px;
+  padding: 24px;
   border: 1px solid var(--border);
   background: var(--surface);
 }
 
-.field {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--border);
+.divider {
+  border: 0;
+  border-top: 1px solid var(--border);
+  opacity: 1;
+  margin: 20px 0 12px;
 }
 
-.field:last-child {
-  border-bottom: 0;
-}
-
-.field-label {
+.section-label {
+  margin: 0 0 8px;
   color: var(--text-muted);
   font-size: 0.6875rem;
   font-weight: 700;
@@ -49,8 +71,9 @@ const auth = useAuth()
   text-transform: uppercase;
 }
 
-.field-value {
-  font-size: 0.875rem;
-  font-weight: 600;
+.note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
 }
 </style>

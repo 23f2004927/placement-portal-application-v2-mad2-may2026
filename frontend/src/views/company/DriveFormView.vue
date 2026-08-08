@@ -44,7 +44,8 @@ function buildPayload() {
       .filter(Boolean),
   }
 }
-
+// A company awaiting approval never reaches this view: meta.requiresApproved on
+// both drive-form routes turns it away in the router guard, before mount.
 onMounted(async () => {
   if (!isEdit.value) return
   try {

@@ -6,6 +6,9 @@ import ModalDialog from '@/components/common/ModalDialog.vue'
 import { useTableFilters } from '@/composables/useTableFilters'
 import { useCapabilities } from '@/composables/useCapabilities'
 import { fetchDrives, updateDrive } from '@/services/drives'
+import { useAuth } from '@/stores/auth'
+
+const auth = useAuth()
 
 const columns = [
   { key: 'title', label: 'Title' },
@@ -61,8 +64,22 @@ onMounted(load)
 
 <template>
   <div>
+    <!-- Say why the button is dead, rather than letting the route guard bounce
+         them back here with no explanation. -->
+    <BAlert v-if="!auth.isApproved" :model-value="true" variant="secondary" class="pending-note">
+      Your account is awaiting approval by the placement office. You can look
+      around, but you cannot post a drive until it is approved.
+    </BAlert>
+
     <div class="view-toolbar">
-      <BButton :to="{ name: 'company-drive-new' }" variant="primary" size="sm">New drive</BButton>
+      <BButton
+        :to="auth.isApproved ? { name: 'company-drive-new' } : undefined"
+        :disabled="!auth.isApproved"
+        variant="primary"
+        size="sm"
+      >
+        New drive
+      </BButton>
     </div>
 
     <DataTable
@@ -119,6 +136,10 @@ onMounted(load)
   display: flex;
   justify-content: flex-end;
   margin-bottom: 16px;
+}
+
+.pending-note {
+  font-size: 0.8125rem;
 }
 
 </style>

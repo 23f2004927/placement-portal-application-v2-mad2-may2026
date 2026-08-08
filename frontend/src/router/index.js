@@ -4,11 +4,6 @@ import LandingView from '@/views/LandingView.vue'
 import DashboardLayout from '@/components/layout/DashboardLayout.vue'
 import { useAuth } from '@/stores/auth'
 
-/*
-  Child `meta.title`/`meta.subtitle` are read by the dashboard topbar. Route meta
-  merges parent → child, so `meta.role` set once on the parent still reaches the
-  guard alongside these.
-*/
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -35,7 +30,7 @@ const router = createRouter({
         {
           path: 'drives',
           name: 'company-drives',
-          component: () => import('@/views/company/JobsView.vue'),
+          component: () => import('@/views/company/DrivesView.vue'),
           meta: { title: 'Drives', subtitle: 'Roles you have posted' },
         },
         {
@@ -48,13 +43,23 @@ const router = createRouter({
           path: 'drives/new',
           name: 'company-drive-new',
           component: () => import('@/views/company/DriveFormView.vue'),
-          meta: { title: 'New drive', subtitle: 'Post a role for students to apply to' },
+          // requiresApproved keeps a company awaiting review out of the form.
+          // Cosmetic: POST /api/drives carries role_required(approved=True).
+          meta: {
+            title: 'New drive',
+            subtitle: 'Post a role for students to apply to',
+            requiresApproved: true,
+          },
         },
         {
           path: 'drives/:id/edit',
           name: 'company-drive-edit',
           component: () => import('@/views/company/DriveFormView.vue'),
-          meta: { title: 'Edit drive', subtitle: 'Update this posting' },
+          meta: {
+            title: 'Edit drive',
+            subtitle: 'Update this posting',
+            requiresApproved: true,
+          },
         },
         {
           path: 'profile',
@@ -79,7 +84,7 @@ const router = createRouter({
         {
           path: 'drives',
           name: 'student-drives',
-          component: () => import('@/views/student/JobsView.vue'),
+          component: () => import('@/views/student/DrivesView.vue'),
           meta: { title: 'Drives', subtitle: 'Open roles you are eligible for' },
         },
         {
@@ -165,6 +170,10 @@ router.beforeEach((to) => {
   if (to.meta.requiresAuth && !auth.isAuthenticated) return '/login'
 
   if (to.meta.role && auth.role !== to.meta.role) return auth.homeRoute
+
+  // Synchronous on purpose. Gating on an awaited fetch inside the component
+  // would let the view mount and render before the answer arrived.
+  if (to.meta.requiresApproved && !auth.isApproved) return auth.homeRoute
 })
 
 export default router
