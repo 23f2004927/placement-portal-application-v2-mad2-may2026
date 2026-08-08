@@ -3,3 +3,5 @@ from app.routes.auth import auth_bp
 from app.routes.drives import drives_bp
 from app.routes.profile import profile_bp
 from app.routes.stats import stats_bp
+from app.routes.companies import companies_bp
+from app.routes.students import students_bp

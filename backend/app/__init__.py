@@ -8,7 +8,15 @@ from flask import Flask
 
 from app.config import Config
 from app.extensions import cors, db, jwt
-from app.routes import applications_bp, auth_bp, drives_bp, profile_bp, stats_bp
+from app.routes import (
+    applications_bp,
+    auth_bp,
+    companies_bp,
+    drives_bp,
+    profile_bp,
+    stats_bp,
+    students_bp,
+)
 
 
 def create_app():
@@ -19,6 +27,8 @@ def create_app():
     app.register_blueprint(drives_bp)
     app.register_blueprint(profile_bp)
     app.register_blueprint(stats_bp)
+    app.register_blueprint(companies_bp)
+    app.register_blueprint(students_bp)
     db.init_app(app)
     jwt.init_app(app)
     cors.init_app(app, origins=["http://localhost:5173"])

@@ -1,7 +1,7 @@
 # 7 aug 26
 # Christiano Fernandes
 # policies.py
-# who may do what to an application, and in which states
+# who may do what to an application, a drive or an account, and in which states
 #
 # Deliberately Flask-free: no request, no session, no queries. That keeps the
 # rules testable without an app context, and stops them quietly growing a
@@ -12,7 +12,7 @@
 # "button shown" and "request permitted" cannot drift apart.
 
 
-from app.models import ApplicationStatus, DriveStatus
+from app.models import AccountStatus, ApplicationStatus, DriveStatus, Role
 
 S = ApplicationStatus
 D = DriveStatus
@@ -29,6 +29,7 @@ COMPANY_SETTABLE_FROM = {S.APPLIED, S.SHORTLISTED, S.INTERVIEW, S.OFFER}
 
 # Companies never see withdrawn applications.
 HIDDEN_FROM_COMPANY = {S.REVOKED}
+
 
 
 def _values(statuses):
@@ -110,3 +111,47 @@ def can_close_drive(drive, role):
 
 def can_moderate_drive(drive, role):
     return role == "admin" and drive.status in DRIVE_MODERATABLE
+
+
+# -------------------------------------------------------------- accounts ----
+#
+# Only companies register as PENDING; students are APPROVED on creation. So in
+# practice this moderates companies, but it is written against User so a future
+# student-approval flow reuses it unchanged.
+
+# A decision is made once, while the account is still awaiting review.
+ACCOUNT_MODERATABLE = {AccountStatus.PENDING}
+
+# What an admin may move an account TO. PENDING is absent: you cannot un-review.
+ACCOUNT_DECISIONS = {AccountStatus.APPROVED, AccountStatus.REJECTED}
+
+# Blacklisting is orthogonal to accountStatus — a toggle, valid from any status.
+ALL_ACCOUNT_STATUSES = set(AccountStatus)
+
+
+def account_capabilities_for(role, review=True):
+    """review=False for students: they register APPROVED, so there is nothing to
+    review — only the blacklist lever applies."""
+    if role != "admin":
+        return {}
+
+    capabilities = {"blacklist": {"allowedFrom": _values(ALL_ACCOUNT_STATUSES)}}
+    if review:
+        capabilities["setAccountStatus"] = {
+            "options": _values(ACCOUNT_DECISIONS),
+            "allowedFrom": _values(ACCOUNT_MODERATABLE),
+        }
+    return capabilities
+
+
+def can_moderate_account(user, role, new_status):
+    return (
+        role == "admin"
+        and new_status in ACCOUNT_DECISIONS
+        and user.accountStatus in ACCOUNT_MODERATABLE
+    )
+
+
+def can_blacklist(user, role):
+    # An admin must never be able to lock out the admin account.
+    return role == "admin" and user.role is not Role.ADMIN

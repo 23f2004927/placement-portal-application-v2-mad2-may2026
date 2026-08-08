@@ -4,8 +4,8 @@
 # Student / Company -> JSON for the profile screens
 
 
-def serialize_student(student):
-    return {
+def serialize_student(student,viewer_role):
+    data=  {
         "id": student.id,
         "name": student.name,
         "email": student.email,
@@ -20,10 +20,14 @@ def serialize_student(student):
         "userName": student.user.userName,
         "accountStatus": student.user.accountStatus.value,
     }
+    if viewer_role == "admin":
+            data["blackListed"] = student.user.blackListed
+
+    return data
 
 
-def serialize_company(company):
-    return {
+def serialize_company(company,viewer_role):
+    data = {
         "id": company.id,
         "name": company.name,
         "industry": company.industry,
@@ -34,3 +38,7 @@ def serialize_company(company):
         "userName": company.user.userName,
         "accountStatus": company.user.accountStatus.value,
     }
+    if viewer_role == "admin":
+            data["blackListed"] = company.user.blackListed
+
+    return data

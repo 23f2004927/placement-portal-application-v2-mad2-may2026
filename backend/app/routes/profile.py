@@ -26,7 +26,7 @@ def _clean(data, key):
     return value.strip() if isinstance(value, str) else value
 
 
-def _commit(serialize, row):
+def _commit(serialize, row, viewer_role):
     try:
         db.session.commit()
     except IntegrityError as exc:
@@ -35,7 +35,7 @@ def _commit(serialize, row):
             message="Some details are already registered.",
             errors=unique_conflict(exc),
         ), 409
-    return jsonify(serialize(row)), 200
+    return jsonify(serialize(row, viewer_role)), 200
 
 
 @profile_bp.route("/student/profile", methods=["GET"])
@@ -44,7 +44,7 @@ def get_student_profile():
     student = current_student()
     if student is None:
         return jsonify(message="No student profile for this account."), 403
-    return jsonify(serialize_student(student)), 200
+    return jsonify(serialize_student(student, "student")), 200
 
 
 @profile_bp.route("/student/profile", methods=["PATCH"])
@@ -95,7 +95,7 @@ def update_student_profile():
     if "resume" in data:
         student.resume = _clean(data, "resume") or None
 
-    return _commit(serialize_student, student)
+    return _commit(serialize_student, student, "student")
 
 
 @profile_bp.route("/company/profile", methods=["GET"])
@@ -104,7 +104,7 @@ def get_company_profile():
     company = current_company()
     if company is None:
         return jsonify(message="No company profile for this account."), 403
-    return jsonify(serialize_company(company)), 200
+    return jsonify(serialize_company(company, "company")), 200
 
 
 @profile_bp.route("/company/profile", methods=["PATCH"])
@@ -129,4 +129,4 @@ def update_company_profile():
     if "location" in data:
         company.location = _clean(data, "location") or None
 
-    return _commit(serialize_company, company)
+    return _commit(serialize_company, company, "company")
