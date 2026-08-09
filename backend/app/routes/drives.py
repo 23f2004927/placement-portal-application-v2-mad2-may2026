@@ -20,6 +20,7 @@ from app.policies import (
     drive_capabilities_for,
 )
 from app.serializers import serialize_drive
+from app.utils.caching import cached_payload, invalidate, scoped_key
 from app.utils.decorators import role_required
 from app.utils.identity import current_company, current_role, current_student
 
@@ -103,22 +104,40 @@ def list_drives():
     the student can actually act on."""
     role = current_role()
 
-    query = Drive.query.options(joinedload(Drive.company))
-    applied_ids = None
-
+    # Identity is resolved BEFORE the cache is consulted, so a caller with no
+    # profile row still gets a 403 rather than a cached body.
+    company = student = None
     if role == "company":
         company = current_company()
         if company is None:
             return jsonify(message="No company profile for this account."), 403
+    elif role == "student":
+        student = current_student()
+        if student is None:
+            return jsonify(message="No student profile for this account."), 403
+    elif role != "admin":
+        return jsonify(message="Forbidden"), 403
+
+    # Keyed per role AND per user: the student branch filters by that student's
+    # own eligibility, so a shared key would serve one student another's list.
+    # 60s TTL, plus an explicit version bump on every drive write.
+    payload = cached_payload(
+        scoped_key("drives"),
+        lambda: _build_drives_payload(role, company, student),
+    )
+    return jsonify(payload), 200
+
+
+def _build_drives_payload(role, company, student):
+    query = Drive.query.options(joinedload(Drive.company))
+    applied_ids = None
+
+    if role == "company":
         query = query.options(selectinload(Drive.applications)).filter(
             Drive.companyId == company.id
         )
 
     elif role == "student":
-        student = current_student()
-        if student is None:
-            return jsonify(message="No student profile for this account."), 403
-
         query = query.filter(Drive.status.in_(STUDENT_VISIBLE_DRIVES))
 
         # Closed postings are not opportunities.
@@ -126,14 +145,11 @@ def list_drives():
             (Drive.applicationDeadline.is_(None)) | (Drive.applicationDeadline >= datetime.now())
         )
 
-        # A NULL criterion means "no restriction on this axis".
-        query = query.filter((Drive.branch.is_(None)) | (Drive.branch == student.branch))
-        if student.cgpa is not None:
-            query = query.filter((Drive.minCgpa.is_(None)) | (Drive.minCgpa <= student.cgpa))
-        if student.gradeYear is not None:
-            query = query.filter(
-                (Drive.eligibleYear.is_(None)) | (Drive.eligibleYear == student.gradeYear)
-            )
+        # Branch / CGPA / year are NOT filtered here. They are the company's
+        # stated preference, not a rule the portal enforces — and the apply
+        # endpoint never checked them, so filtering the list only hid
+        # information without preventing anything. The serializer annotates
+        # each row with `eligible` and `ineligibleReasons` instead.
 
         # One query for the whole page rather than one per row.
         applied_ids = {
@@ -146,15 +162,12 @@ def list_drives():
     elif role == "admin":
         query = query.options(selectinload(Drive.applications))
 
-    else:
-        return jsonify(message="Forbidden"), 403
-
     drives = query.order_by(Drive.createdAt.desc()).all()
 
-    return jsonify(
-        items=[serialize_drive(d, role, applied_ids) for d in drives],
-        capabilities=drive_capabilities_for(role),
-    ), 200
+    return {
+        "items": [serialize_drive(d, role, applied_ids, student) for d in drives],
+        "capabilities": drive_capabilities_for(role),
+    }
 
 
 @drives_bp.route("/drives/<int:drive_id>", methods=["GET"])
@@ -175,7 +188,9 @@ def get_drive(drive_id):
     elif role not in ("company", "student", "admin"):
         return jsonify(message="Forbidden"), 403
 
-    return jsonify(serialize_drive(drive, role, set())), 200
+    return jsonify(
+        serialize_drive(drive, role, set(), current_student() if role == "student" else None)
+    ), 200
 
 
 # approved=True is the real gate on a pending company, and this is the only
@@ -201,6 +216,7 @@ def create_drive():
 
     db.session.add(drive)
     db.session.commit()
+    invalidate("drives")
 
     return jsonify(serialize_drive(drive, "company", set())), 201
 
@@ -250,5 +266,6 @@ def update_drive(drive_id):
             return jsonify(message=error), 400
 
     db.session.commit()
+    invalidate("drives")
 
     return jsonify(serialize_drive(drive, role, set())), 200

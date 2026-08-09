@@ -7,16 +7,19 @@
 
 
 from app.models import ApplicationStatus
+from app.policies import drive_ineligibility
 
 
 def _iso(value):
     return value.isoformat() if value else None
 
 
-def serialize_drive(drive, viewer_role, applied_drive_ids=None):
+def serialize_drive(drive, viewer_role, applied_drive_ids=None, student=None):
     """`applied_drive_ids` is the set of drive ids the calling student already
     has a row for. Passed in rather than looked up here so the whole list costs
-    one extra query instead of one per row."""
+    one extra query instead of one per row.
+
+    `student` is the calling student, used only to annotate eligibility."""
     data = {
         "id": drive.id,
         "title": drive.title,
@@ -41,5 +44,10 @@ def serialize_drive(drive, viewer_role, applied_drive_ids=None):
 
     if viewer_role == "student":
         data["alreadyApplied"] = drive.id in (applied_drive_ids or set())
+
+        # Advisory only. The drive is listed either way and Apply stays enabled.
+        reasons = drive_ineligibility(drive, student) if student else []
+        data["eligible"] = not reasons
+        data["ineligibleReasons"] = reasons
 
     return data

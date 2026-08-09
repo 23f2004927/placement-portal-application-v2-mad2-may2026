@@ -18,6 +18,7 @@ from app.extensions import db
 from app.models import AccountStatus, Company
 from app.policies import account_capabilities_for, can_blacklist, can_moderate_account
 from app.serializers import serialize_company
+from app.utils.caching import cached_payload, invalidate, scoped_key
 from app.utils.decorators import role_required
 
 
@@ -30,15 +31,20 @@ companies_bp = Blueprint("companies", __name__, url_prefix="/api")
 def list_companies():
     # joinedload is load-bearing: the serializer reads company.user for three
     # fields, so without it every row costs an extra SELECT.
-    companies = (
-        Company.query.options(joinedload(Company.user))
-        .order_by(Company.name)
-        .all()
-    )
+    # per_user=False: every admin sees exactly the same register, so one shared
+    # key is correct here — unlike /api/drives, nothing is scoped to the caller.
+    def build():
+        companies = (
+            Company.query.options(joinedload(Company.user))
+            .order_by(Company.name)
+            .all()
+        )
+        return {
+            "items": [serialize_company(c, "admin") for c in companies],
+            "capabilities": account_capabilities_for("admin"),
+        }
 
-    return jsonify(
-        items=[serialize_company(c, "admin") for c in companies],
-        capabilities=account_capabilities_for("admin")), 200
+    return jsonify(cached_payload(scoped_key("companies", per_user=False), build)), 200
 
 
 @companies_bp.route("/admin/companies/<int:company_id>", methods=["PATCH"])
@@ -79,5 +85,6 @@ def moderate_company(company_id):
         user.blackListed = value
 
     db.session.commit()
+    invalidate("companies")
 
     return jsonify(serialize_company(company, "admin")), 200

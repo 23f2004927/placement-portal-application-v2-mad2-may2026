@@ -5,7 +5,8 @@ import StatusBadge from '@/components/common/StatusBadge.vue'
 import ModalDialog from '@/components/common/ModalDialog.vue'
 import { useTableFilters } from '@/composables/useTableFilters'
 import { useCapabilities } from '@/composables/useCapabilities'
-import { fetchApplications, revokeApplication } from '@/services/applications'
+import { fetchApplications, revokeApplication, downloadOfferLetter } from '@/services/applications'
+import { startExport, exportState, downloadExport } from '@/services/exports'
 
 const columns = [
   { key: 'driveTitle', label: 'Role' },
@@ -56,11 +57,62 @@ async function confirmWithdraw() {
   }
 }
 
+async function download(row) {
+  try {
+    await downloadOfferLetter(row.id)
+  } catch {
+    error.value = 'Could not download that offer letter.'
+  }
+}
+
+/*
+  The export is a Celery job, so the POST only returns a task id. We poll until
+  the worker reports SUCCESS, then fetch the file. Requires a running worker —
+  without one this stays "Working…" forever, which is the honest behaviour.
+*/
+const exporting = ref(false)
+const exportMsg = ref('')
+
+async function exportCsv() {
+  exporting.value = true
+  exportMsg.value = 'Preparing your export…'
+  try {
+    const { taskId } = await startExport()
+
+    for (let attempt = 0; attempt < 20; attempt++) {
+      await new Promise((r) => setTimeout(r, 1000))
+      const { state } = await exportState(taskId)
+
+      if (state === 'SUCCESS') {
+        await downloadExport(taskId)
+        exportMsg.value = 'Export downloaded.'
+        return
+      }
+      if (state === 'FAILURE') {
+        exportMsg.value = 'The export failed.'
+        return
+      }
+    }
+    exportMsg.value = 'Still working — is the Celery worker running?'
+  } catch (err) {
+    exportMsg.value = err.response?.data?.message ?? 'Could not start the export.'
+  } finally {
+    exporting.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
 <template>
   <div>
+    <div class="view-toolbar">
+      <span v-if="exportMsg" class="export-msg">{{ exportMsg }}</span>
+      <BButton variant="outline-primary" size="sm" :disabled="exporting" @click="exportCsv">
+        {{ exporting ? 'Working…' : 'Export CSV' }}
+      </BButton>
+    </div>
+
     <DataTable
       :columns="columns"
       :rows="visibleRows"
@@ -75,6 +127,14 @@ onMounted(load)
       <template #actions="{ row }">
         <BButton variant="link" size="sm" :disabled="!row.feedback" @click="viewing = row">
           Feedback
+        </BButton>
+        <BButton
+          variant="link"
+          size="sm"
+          :disabled="!row.offerLetterIssuedAt"
+          @click="download(row)"
+        >
+          Offer letter
         </BButton>
         <BButton variant="link" size="sm" class="text-danger"
           :disabled="!can('revoke', row)"
@@ -115,6 +175,19 @@ onMounted(load)
 
 <style scoped>
 .muted {
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+
+.view-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.export-msg {
   color: var(--text-muted);
   font-size: 0.8125rem;
 }

@@ -4,21 +4,23 @@
 # /api/applications — one resource, scoped three ways by JWT claim
 
 
-from datetime import datetime
+from datetime import date, datetime
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, Response, jsonify, render_template, request
 from flask_jwt_extended import jwt_required
 from sqlalchemy.orm import joinedload
 
 from app.extensions import IntegrityError, db
-from app.models import Application, ApplicationStatus, Drive, DriveStatus
+from app.models import Application, ApplicationStatus, Drive, DriveStatus, OfferLetter
 from app.policies import (
     HIDDEN_FROM_COMPANY,
+    can_issue_offer_letter,
     can_revoke,
     can_set_status,
     capabilities_for,
 )
 from app.serializers import serialize_application
+from app.utils.caching import invalidate
 from app.utils.decorators import role_required
 from app.utils.identity import current_company, current_role, current_student
 
@@ -69,6 +71,7 @@ def list_applications():
     query = Application.query.options(
         joinedload(Application.drive).joinedload(Drive.company),
         joinedload(Application.student),
+        joinedload(Application.offerLetter),
     )
 
     if role == "student":
@@ -130,6 +133,10 @@ def create_application():
         db.session.rollback()
         return jsonify(message="You have already applied to this drive."), 409
 
+    # The drive payload carries applicationCount and alreadyApplied, so applying
+    # changes what /api/drives should return.
+    invalidate("drives")
+
     return jsonify(serialize_application(application, "student")), 201
 
 
@@ -146,8 +153,76 @@ def revoke_application(application_id):
 
     application.status = ApplicationStatus.REVOKED
     db.session.commit()
+    invalidate("drives")
 
     return jsonify(serialize_application(application, role)), 200
+
+
+@applications_bp.route("/applications/<int:application_id>/offer-letter", methods=["POST"])
+@jwt_required()
+def issue_offer_letter(application_id):
+    role = current_role()
+    application = _load_owned(application_id, role)
+    if application is None:
+        return jsonify(message="Application not found."), 404
+
+    if not can_issue_offer_letter(application, role):
+        return jsonify(message="An offer letter can only be issued on an offer."), 409
+
+    if application.offerLetter is not None:
+        return jsonify(message="An offer letter has already been issued."), 409
+
+    data = request.get_json(silent=True) or {}
+    joining_date = None
+    if data.get("joiningDate"):
+        try:
+            joining_date = date.fromisoformat(data["joiningDate"])
+        except (TypeError, ValueError):
+            return jsonify(message="Invalid joining date."), 400
+
+    drive = application.drive
+    letter = OfferLetter(
+        applicationId=application.id,
+        roleTitle=drive.title,
+        companyName=drive.company.name,
+        jobType=drive.jobType.value if drive.jobType else None,
+        location=drive.company.location,
+        salary=drive.salary,
+        joiningDate=joining_date,
+    )
+
+    # Mirror onto the application so the placement record matches the letter.
+    application.finalSalary = drive.salary
+    application.joiningDate = joining_date
+
+    db.session.add(letter)
+    db.session.commit()
+
+    return jsonify(serialize_application(application, role)), 201
+
+
+@applications_bp.route("/applications/<int:application_id>/offer-letter", methods=["GET"])
+@jwt_required()
+def download_offer_letter(application_id):
+    """Served as an HTML attachment rather than a PDF: a PDF library is outside
+    the permitted stack, and the browser can print this to PDF."""
+    role = current_role()
+    application = _load_owned(application_id, role)
+    if application is None:
+        return jsonify(message="Application not found."), 404
+
+    letter = application.offerLetter
+    if letter is None:
+        return jsonify(message="No offer letter has been issued yet."), 404
+
+    html = render_template("offer_letter.html", letter=letter, student=application.student)
+    filename = f"offer-letter-{letter.applicationId}.html"
+
+    return Response(
+        html,
+        mimetype="text/html",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @applications_bp.route("/applications/<int:application_id>", methods=["PATCH"])

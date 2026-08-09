@@ -30,6 +30,9 @@ COMPANY_SETTABLE_FROM = {S.APPLIED, S.SHORTLISTED, S.INTERVIEW, S.OFFER}
 # Companies never see withdrawn applications.
 HIDDEN_FROM_COMPANY = {S.REVOKED}
 
+# A letter can only follow an offer that actually exists.
+OFFER_LETTER_ISSUABLE = {S.OFFER}
+
 
 
 def _values(statuses):
@@ -46,17 +49,27 @@ def capabilities_for(role):
         "allowedFrom": _values(COMPANY_SETTABLE_FROM),
     }
 
+    issue_offer_letter = {"allowedFrom": _values(OFFER_LETTER_ISSUABLE)}
+
     if role == "student":
         return {"revoke": revoke}
     if role == "company":
-        return {"setStatus": set_status}
+        return {"setStatus": set_status, "issueOfferLetter": issue_offer_letter}
     if role == "admin":
-        return {"revoke": revoke, "setStatus": set_status}
+        return {
+            "revoke": revoke,
+            "setStatus": set_status,
+            "issueOfferLetter": issue_offer_letter,
+        }
     return {}
 
 
 def can_revoke(application, role):
     return role in ("student", "admin") and application.status in REVOKABLE
+
+
+def can_issue_offer_letter(application, role):
+    return role in ("company", "admin") and application.status in OFFER_LETTER_ISSUABLE
 
 
 def can_set_status(application, role, new_status):
@@ -111,6 +124,30 @@ def can_close_drive(drive, role):
 
 def can_moderate_drive(drive, role):
     return role == "admin" and drive.status in DRIVE_MODERATABLE
+
+
+def drive_ineligibility(drive, student):
+    """Why this student falls outside the drive's STATED criteria.
+
+    Empty list means they meet everything. This is advisory, never a gate:
+    the criteria are the company's stated preference, not a rule the portal
+    enforces, so the student still sees the drive and can still apply. The
+    company gets the same flag on the application and decides for itself.
+
+    A NULL criterion means no restriction on that axis.
+    """
+    reasons = []
+
+    if drive.branch is not None and student.branch != drive.branch:
+        reasons.append(f"Open to {drive.branch.value.replace('_', ' ')}")
+
+    if drive.minCgpa is not None and (student.cgpa is None or student.cgpa < drive.minCgpa):
+        reasons.append(f"Minimum CGPA {drive.minCgpa}")
+
+    if drive.eligibleYear is not None and student.gradeYear != drive.eligibleYear:
+        reasons.append(f"Graduating {drive.eligibleYear}")
+
+    return reasons
 
 
 # -------------------------------------------------------------- accounts ----

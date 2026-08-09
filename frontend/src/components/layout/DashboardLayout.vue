@@ -3,6 +3,7 @@ import { ref, watch, onMounted } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import Sidebar from '@/components/layout/Sidebar.vue'
 import FilterBar from '@/components/layout/FilterBar.vue'
+import NotificationBell from '@/components/layout/NotificationBell.vue'
 import { useAuth } from '@/stores/auth'
 
 const route = useRoute()
@@ -47,6 +48,7 @@ watch(pinned, (value) => localStorage.setItem('sidebarPinned', value ? '1' : '0'
       </div>
 
       <FilterBar />
+      <NotificationBell />
     </header>
 
     <main class="dash-main">

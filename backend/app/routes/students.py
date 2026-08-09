@@ -14,6 +14,7 @@ from app.extensions import db
 from app.models import Student
 from app.policies import account_capabilities_for, can_blacklist
 from app.serializers import serialize_student
+from app.utils.caching import cached_payload, invalidate, scoped_key
 from app.utils.decorators import role_required
 
 students_bp = Blueprint("students", __name__, url_prefix="/api")
@@ -22,14 +23,16 @@ students_bp = Blueprint("students", __name__, url_prefix="/api")
 @students_bp.route("/admin/students", methods=["GET"])
 @role_required("admin")
 def list_students():
-    students = (
-        Student.query.options(joinedload(Student.user)).order_by(Student.name).all()
-    )
+    def build():
+        students = (
+            Student.query.options(joinedload(Student.user)).order_by(Student.name).all()
+        )
+        return {
+            "items": [serialize_student(s, "admin") for s in students],
+            "capabilities": account_capabilities_for("admin", review=False),
+        }
 
-    return jsonify(
-        items=[serialize_student(s, "admin") for s in students],
-        capabilities=account_capabilities_for("admin", review=False),
-    ), 200
+    return jsonify(cached_payload(scoped_key("students", per_user=False), build)), 200
 
 
 @students_bp.route("/admin/students/<int:student_id>", methods=["PATCH"])
@@ -54,5 +57,6 @@ def moderate_student(student_id):
         student.user.blackListed = value
 
     db.session.commit()
+    invalidate("students")
 
     return jsonify(serialize_student(student, "admin")), 200

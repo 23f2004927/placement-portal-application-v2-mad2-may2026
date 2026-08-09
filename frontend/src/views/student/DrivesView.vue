@@ -13,6 +13,7 @@ const columns = [
   { key: 'minCgpa', label: 'Min CGPA', width: '100px' },
   { key: 'salary', label: 'Salary', width: '110px' },
   { key: 'applicationDeadline', label: 'Closes', width: '140px' },
+  { key: 'eligible', label: 'Match', width: '150px' },
 ]
 
 const rows = ref([])
@@ -76,6 +77,20 @@ onMounted(load)
         <span v-for="skill in value ?? []" :key="skill" class="skill">{{ skill }}</span>
       </template>
 
+      <!-- Advisory, not a gate: the company sets these criteria as a preference
+           and Apply stays enabled either way. -->
+      <template #cell-eligible="{ row }">
+        <BBadge v-if="row.eligible" variant="success" class="match">Meets criteria</BBadge>
+        <BBadge
+          v-else
+          variant="secondary"
+          class="match"
+          :title="row.ineligibleReasons.join(' · ')"
+        >
+          {{ row.ineligibleReasons.join(' · ') }}
+        </BBadge>
+      </template>
+
       <template #actions="{ row }">
         <BButton variant="link" size="sm"
           :disabled="row.alreadyApplied"
@@ -97,6 +112,16 @@ onMounted(load)
       <p class="mb-2">
         <strong>{{ applying?.title }}</strong> at {{ applying?.companyName }}
       </p>
+      <BAlert
+        v-if="applying && !applying.eligible"
+        :model-value="true"
+        variant="secondary"
+        class="mb-2 below"
+      >
+        You are outside this drive's stated criteria ({{ applying.ineligibleReasons.join(' · ') }}).
+        You can still apply — the company decides.
+      </BAlert>
+
       <p class="muted mb-0">
         Your profile is shared with the company. You can withdraw while the application is still
         being reviewed.
@@ -116,6 +141,18 @@ onMounted(load)
 
 .muted {
   color: var(--text-muted);
+}
+
+.match {
+  padding: 4px 8px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  white-space: normal;
+  text-align: left;
+}
+
+.below {
+  font-size: 0.8125rem;
 }
 
 </style>

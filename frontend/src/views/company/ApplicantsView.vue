@@ -5,7 +5,12 @@ import StatusBadge from '@/components/common/StatusBadge.vue'
 import ModalDialog from '@/components/common/ModalDialog.vue'
 import { useTableFilters } from '@/composables/useTableFilters'
 import { useCapabilities } from '@/composables/useCapabilities'
-import { fetchApplications, updateApplication } from '@/services/applications'
+import {
+  fetchApplications,
+  updateApplication,
+  issueOfferLetter,
+  downloadOfferLetter,
+} from '@/services/applications'
 
 const columns = [
   { key: 'studentName', label: 'Candidate' },
@@ -13,6 +18,7 @@ const columns = [
   { key: 'branch', label: 'Branch', width: '150px' },
   { key: 'cgpa', label: 'CGPA', width: '80px' },
   { key: 'driveTitle', label: 'Drive' },
+  { key: 'belowCriteria', label: 'Match', width: '150px' },
   { key: 'interviewScheduledAt', label: 'Interview', width: '150px' },
   { key: 'status', label: 'Status', width: '130px' },
 ]
@@ -29,8 +35,10 @@ const visibleRows = computed(() => apply(rows.value))
 const { can, optionsFor } = useCapabilities(capabilities)
 
 const editing = ref(null)
+const offering = ref(null)
 const busy = ref(false)
 const draft = reactive({ status: '', feedback: '', interviewScheduledAt: '' })
+const joiningDate = ref('')
 
 async function load() {
   loading.value = true
@@ -72,6 +80,33 @@ async function save() {
   }
 }
 
+function openOffer(row) {
+  offering.value = row
+  joiningDate.value = ''
+}
+
+async function confirmOffer() {
+  busy.value = true
+  try {
+    await issueOfferLetter(offering.value.id, joiningDate.value || null)
+    offering.value = null
+    await load()
+  } catch (err) {
+    error.value = err.response?.data?.message ?? 'Could not issue that offer letter.'
+    offering.value = null
+  } finally {
+    busy.value = false
+  }
+}
+
+async function download(row) {
+  try {
+    await downloadOfferLetter(row.id)
+  } catch {
+    error.value = 'Could not download that offer letter.'
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -88,6 +123,15 @@ onMounted(load)
         <StatusBadge :status="value" />
       </template>
 
+      <!-- Students may apply outside the advertised criteria, so say which ones
+           did rather than letting it pass unnoticed. -->
+      <template #cell-belowCriteria="{ row }">
+        <BBadge v-if="row.belowCriteria" variant="secondary" class="match">
+          {{ row.criteriaMissed.join(' · ') }}
+        </BBadge>
+        <span v-else class="text-muted">—</span>
+      </template>
+
       <template #actions="{ row }">
         <BButton variant="link" size="sm"
           :disabled="!can('setStatus', row)"
@@ -95,8 +139,47 @@ onMounted(load)
         >
           Update
         </BButton>
+        <BButton
+          v-if="row.offerLetterIssuedAt"
+          variant="link"
+          size="sm"
+          @click="download(row)"
+        >
+          Offer letter
+        </BButton>
+        <BButton
+          v-else
+          variant="link"
+          size="sm"
+          :disabled="!can('issueOfferLetter', row)"
+          @click="openOffer(row)"
+        >
+          Issue offer
+        </BButton>
       </template>
     </DataTable>
+
+    <ModalDialog
+      :model-value="!!offering"
+      title="Issue offer letter"
+      confirm-text="Issue"
+      :busy="busy"
+      @update:model-value="offering = null"
+      @confirm="confirmOffer"
+    >
+      <p class="candidate">
+        {{ offering?.studentName }} — <span class="muted">{{ offering?.driveTitle }}</span>
+      </p>
+
+      <p class="muted mb-3">
+        The letter copies the drive's title, type, location and salary as they stand now. Later
+        edits to the drive will not change it.
+      </p>
+
+      <BFormGroup label="Joining date" label-for="offer-joining" description="Optional">
+        <BFormInput id="offer-joining" v-model="joiningDate" type="date" />
+      </BFormGroup>
+    </ModalDialog>
 
     <ModalDialog
       :model-value="!!editing"
@@ -144,6 +227,14 @@ onMounted(load)
 .muted {
   color: var(--text-muted);
   font-weight: 400;
+}
+
+.match {
+  padding: 4px 8px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  white-space: normal;
+  text-align: left;
 }
 
 </style>
