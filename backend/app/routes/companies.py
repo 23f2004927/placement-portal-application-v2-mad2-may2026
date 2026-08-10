@@ -2,10 +2,12 @@
 # Christiano Fernandes
 # companies.py
 # /api/admin/companies — company account moderation
+# /api/companies       — the read-only recruiter directory students see
 #
-# Unlike /api/applications and /api/drives this is NOT one resource seen three
-# ways. It has exactly one audience, so role_required IS the authorization and
-# there is no role branch to write.
+# Two endpoints rather than one branching on role, because they are not the
+# same resource narrowed: the admin's list is an account register with a
+# moderation queue, the student's is a directory of who recruits here. Sharing
+# a route would mean one payload builder deciding, per field, who may see it.
 #
 # Scoped to companies rather than a generic /api/admin/users endpoint on purpose:
 # a generic one could blacklist the admin account and lock everyone out.
@@ -15,7 +17,7 @@ from flask import Blueprint, jsonify, request
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import AccountStatus, Company, User
+from app.models import AccountStatus, Company, Drive, DriveStatus, User
 from app.policies import account_capabilities_for, can_blacklist, can_moderate_account
 from app.serializers import serialize_company
 from app.utils.caching import cached_payload, invalidate, scoped_key
@@ -61,6 +63,63 @@ def list_companies():
             **meta,
         }
 
+    return jsonify(cached_payload(scoped_key("companies", per_user=False), build)), 200
+
+
+@companies_bp.route("/companies", methods=["GET"])
+@role_required("student")
+def list_companies_for_students():
+    """The recruiter directory. Approved and non-blacklisted only — a student
+    has no business seeing an account the admin turned down, and a rejected
+    company appearing here would read as an endorsement.
+
+    Each row carries how many drives the company currently has open, which is
+    the one number that makes the list worth browsing.
+    """
+
+    def build():
+        open_drives = (
+            db.session.query(Drive.companyId, db.func.count(Drive.id).label("openDrives"))
+            .filter(Drive.status == DriveStatus.APPROVED)
+            .group_by(Drive.companyId)
+            .subquery()
+        )
+
+        query = (
+            Company.query.options(joinedload(Company.user))
+            .join(User, Company.userId == User.id)
+            .outerjoin(open_drives, open_drives.c.companyId == Company.id)
+            .filter(User.accountStatus == AccountStatus.APPROVED, User.blackListed.is_(False))
+            .add_columns(db.func.coalesce(open_drives.c.openDrives, 0).label("openDrives"))
+        )
+
+        query = search(query, [Company.name, Company.industry, Company.location])
+        query = sort(
+            query,
+            {
+                "name": Company.name,
+                "industry": Company.industry,
+                "location": Company.location,
+                "openDrives": db.func.coalesce(open_drives.c.openDrives, 0),
+            },
+            default=(Company.name, Company.id),
+        )
+
+        rows, meta = paginate(query)
+        return {
+            "items": [
+                {**serialize_company(company, "student"), "openDrives": count}
+                for company, count in rows
+            ],
+            # Nothing to do here — the directory is read-only.
+            "capabilities": {},
+            **meta,
+        }
+
+    # Same namespace as the admin register, so approving or blacklisting a
+    # company drops both at once — that is the change that MUST be immediate.
+    # openDrives depends on the drives namespace instead, so it rides the 60s
+    # TTL: a directory count one minute behind is not worth cross-invalidating.
     return jsonify(cached_payload(scoped_key("companies", per_user=False), build)), 200
 
 

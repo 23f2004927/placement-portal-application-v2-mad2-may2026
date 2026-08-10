@@ -100,6 +100,12 @@ const router = createRouter({
           meta: { title: 'Applications', subtitle: 'Everything you have applied to' },
         },
         {
+          path: 'companies',
+          name: 'student-companies',
+          component: () => import('@/views/student/CompaniesView.vue'),
+          meta: { title: 'Companies', subtitle: 'Who recruits here' },
+        },
+        {
           path: 'screener',
           name: 'student-ats',
           component: () => import('@/views/shared/AtsView.vue'),

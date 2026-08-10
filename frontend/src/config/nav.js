@@ -13,6 +13,7 @@ export const navByRole = {
   student: [
     { to: { name: 'student-analytics' }, label: 'Overview', short: 'OV' },
     { to: { name: 'student-drives' }, label: 'Drives', short: 'DR' },
+    { to: { name: 'student-companies' }, label: 'Companies', short: 'CO' },
     { to: { name: 'student-applications' }, label: 'Applications', short: 'AP' },
     { to: { name: 'student-ats' }, label: 'Screener', short: 'SC' },
   ],

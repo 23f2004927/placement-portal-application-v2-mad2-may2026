@@ -9,7 +9,13 @@
 # student A's results — a data leak, not a stale-cache bug.
 #
 # So the key is built by hand and always carries:
-#   namespace : version : role : userId : query-string
+#   namespace : version : path : role : userId : query-string
+#
+# The PATH is in there because two endpoints can legitimately share a namespace
+# — /api/admin/companies and /api/companies both have to be dropped when a
+# company is approved. Without the path they would also share a cache entry,
+# and per_user=False drops the role too, so the admin's payload (account status,
+# blacklist flags, moderation capabilities) could be served to a student.
 #
 # The version is a counter in Redis. Bumping it on a write orphans every old key
 # at once, which is how you invalidate per-user keys without having to enumerate
@@ -44,7 +50,7 @@ def invalidate(namespace):
 def scoped_key(namespace, per_user=True):
     """per_user=False for lists that are identical for every caller who is
     allowed to see them at all — the admin registers, for instance."""
-    parts = [namespace, str(_version(namespace))]
+    parts = [namespace, str(_version(namespace)), request.path]
 
     if per_user:
         parts += [current_role() or "-", str(current_user_id())]
