@@ -7,12 +7,14 @@ export const navByRole = {
     { to: { name: 'company-analytics' }, label: 'Overview', short: 'OV' },
     { to: { name: 'company-drives' }, label: 'Drives', short: 'DR' },
     { to: { name: 'company-applicants' }, label: 'Applicants', short: 'AP' },
+    { to: { name: 'company-ats' }, label: 'Screener', short: 'SC' },
   ],
 
   student: [
     { to: { name: 'student-analytics' }, label: 'Overview', short: 'OV' },
     { to: { name: 'student-drives' }, label: 'Drives', short: 'DR' },
     { to: { name: 'student-applications' }, label: 'Applications', short: 'AP' },
+    { to: { name: 'student-ats' }, label: 'Screener', short: 'SC' },
   ],
 
   admin: [

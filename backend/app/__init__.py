@@ -10,7 +10,9 @@ from app.celery_app import celery_init_app
 from app.config import Config
 from app.extensions import cache, cors, db, jwt
 from app.routes import (
+    analytics_bp,
     applications_bp,
+    ats_bp,
     auth_bp,
     companies_bp,
     drives_bp,
@@ -34,6 +36,8 @@ def create_app():
     app.register_blueprint(students_bp)
     app.register_blueprint(notifications_bp)
     app.register_blueprint(exports_bp)
+    app.register_blueprint(analytics_bp)
+    app.register_blueprint(ats_bp)
     db.init_app(app)
     jwt.init_app(app)
     cors.init_app(app, origins=["http://localhost:5173"])

@@ -1,7 +1,9 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import PublicNavbar from '@/components/layout/PublicNavbar.vue';
+import ChartCard from '@/components/common/ChartCard.vue'
 import { site } from '@/config/site'
+import { fetchPublicStats } from '@/services/analytics'
 
 // Static content — the landing page fetches nothing.
 // Kept as data so the markup stays one v-for instead of three near-identical blocks.
@@ -42,6 +44,32 @@ function handleSelect(key) {
   pinned.value = key
   preview.value = null
 }
+
+/*
+  The public dashboard. Aggregate counts only — no names, no per-student rows —
+  because this renders before anyone has signed in. The endpoint enforces that;
+  this just displays it.
+*/
+const stats = ref(null)
+
+onMounted(async () => {
+  try {
+    stats.value = await fetchPublicStats()
+  } catch {
+    /* a landing page must still render if the API is down */
+  }
+})
+
+const publicTiles = computed(() => [
+  { label: 'Students registered', value: stats.value?.students },
+  { label: 'Companies hiring', value: stats.value?.companies },
+  { label: 'Drives open now', value: stats.value?.openDrives },
+  { label: 'Students placed', value: stats.value?.placed },
+])
+
+const placementSeries = computed(() => [
+  { label: 'Students placed', data: stats.value?.placements ?? [] },
+])
 </script>
 
 <template>
@@ -75,6 +103,31 @@ function handleSelect(key) {
                 <BButton to="/register/student" variant="primary">Register as Student</BButton>
                 <BButton to="/register/company" variant="outline-primary">Register as Company</BButton>
               </div>
+            </template>
+
+            <!-- Placements: public, pre-login, aggregate only -->
+            <template v-else-if="active === 'stats'">
+              <p class="eyebrow">Placements</p>
+              <h1 class="panel-title">How the cycle is going.</h1>
+
+              <div class="public-tiles">
+                <div v-for="tile in publicTiles" :key="tile.label" class="tile">
+                  <span class="tile-value">{{ tile.value ?? '—' }}</span>
+                  <span class="tile-label">{{ tile.label }}</span>
+                </div>
+              </div>
+
+              <ChartCard
+                title="Students placed"
+                subtitle="Last 6 months"
+                :labels="stats?.months ?? []"
+                :series="placementSeries"
+                :height="200"
+              />
+
+              <p class="panel-note">
+                Aggregate figures only. No student or company details are shown here.
+              </p>
             </template>
 
             <!-- About -->
@@ -216,6 +269,40 @@ function handleSelect(key) {
 .panel-note a {
   color: var(--primary);
   font-weight: 600;
+}
+
+/* Public stats tiles */
+
+.public-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 20px 0 16px;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+/* Proportional figures, not tabular: these are standalone numbers, and
+   equal-width digits read as loose at this size. */
+.tile-value {
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.tile-label {
+  color: var(--text-muted);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 /* Definition lists — used by both About and Contact */

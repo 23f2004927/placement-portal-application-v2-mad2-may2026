@@ -4,6 +4,8 @@ from app.routes.drives import drives_bp
 from app.routes.profile import profile_bp
 from app.routes.stats import stats_bp
 from app.routes.companies import companies_bp
+from app.routes.analytics import analytics_bp
+from app.routes.ats import ats_bp
 from app.routes.exports import exports_bp
 from app.routes.notifications import notifications_bp
 from app.routes.students import students_bp

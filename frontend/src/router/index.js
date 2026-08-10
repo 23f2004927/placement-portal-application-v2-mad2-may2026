@@ -62,6 +62,12 @@ const router = createRouter({
           },
         },
         {
+          path: 'screener',
+          name: 'company-ats',
+          component: () => import('@/views/shared/AtsView.vue'),
+          meta: { title: 'Resume screener', subtitle: 'Match a resume against a drive' },
+        },
+        {
           path: 'profile',
           name: 'company-profile',
           component: () => import('@/views/company/ProfileView.vue'),
@@ -92,6 +98,12 @@ const router = createRouter({
           name: 'student-applications',
           component: () => import('@/views/student/ApplicationsView.vue'),
           meta: { title: 'Applications', subtitle: 'Everything you have applied to' },
+        },
+        {
+          path: 'screener',
+          name: 'student-ats',
+          component: () => import('@/views/shared/AtsView.vue'),
+          meta: { title: 'Resume screener', subtitle: 'Check your resume against a drive' },
         },
         {
           path: 'profile',
