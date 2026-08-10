@@ -1,8 +1,8 @@
 import api from './api'
 
 // One endpoint, scoped three ways by JWT claim.
-export async function fetchDrives() {
-  const res = await api.get('/drives')
+export async function fetchDrives(params) {
+  const res = await api.get('/drives', { params })
   return res.data // { items, capabilities }
 }
 

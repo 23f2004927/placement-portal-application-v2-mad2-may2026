@@ -1,8 +1,8 @@
 import api from './api'
 
 // One endpoint, scoped three ways by JWT claim — the caller never says who it is.
-export async function fetchApplications() {
-  const res = await api.get('/applications')
+export async function fetchApplications(params) {
+  const res = await api.get('/applications', { params })
   return res.data // { items, capabilities }
 }
 

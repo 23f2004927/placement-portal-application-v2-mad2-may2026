@@ -55,16 +55,18 @@ function display(col, value) {
   return value ?? '—'
 }
 
-const pages = computed(() => Math.ceil(props.total / props.perPage) || 1)
 const firstRow = computed(() => (props.page - 1) * props.perPage + 1)
 const lastRow = computed(() => Math.min(props.page * props.perPage, props.total))
 
 // `width` on a column becomes a header style; BTable has no width prop.
 const fields = computed(() => {
+  // sortable stays false for BTable: its sort is client-side and would reorder
+  // only the current page, fighting the server ordering. The header buttons
+  // below own sorting; `col.sortable` decides whether one is rendered.
   const mapped = props.columns.map((col) => ({
     key: col.key,
     label: col.label,
-    sortable: col.sortable ?? false,
+    sortable: false,
     thStyle: col.width ? { width: col.width } : undefined,
   }))
 

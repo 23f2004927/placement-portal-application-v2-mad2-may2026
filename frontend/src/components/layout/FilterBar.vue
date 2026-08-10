@@ -30,10 +30,15 @@ watch(
   },
 )
 
+// page is dropped alongside every filter write: page 4 of an unfiltered list is
+// usually past the end of a filtered one.
 let debounce
 watch(searchText, (value) => {
   clearTimeout(debounce)
-  debounce = setTimeout(() => setQuery({ search: value.trim() || undefined }), 300)
+  debounce = setTimeout(
+    () => setQuery({ search: value.trim() || undefined, page: undefined }),
+    300,
+  )
 })
 
 function setQuery(patch) {
