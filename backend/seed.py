@@ -143,6 +143,22 @@ with app.app_context():
         status=DriveStatus.PENDING,
     )
     db.session.add(drive2)
+
+    # Approved and open — this is the drive the seeded OFFER hangs off, so the
+    # accept / decline flow is reachable from a drive the student can also see.
+    drive3 = Drive(
+        companyId=company1.id,
+        title="QA Engineer",
+        description="Manual and automated testing for the platform team.",
+        minCgpa=6.5,
+        skillsRequired=["Python", "Selenium", "SQL"],
+        salary=900000.0,
+        numOpenings=2,
+        jobType=JobType.FULL_TIME,
+        applicationDeadline=datetime.now(UTC) + timedelta(days=10),
+        status=DriveStatus.APPROVED,
+    )
+    db.session.add(drive3)
     db.session.flush()
 
     # --- Applications ---
@@ -161,6 +177,16 @@ with app.app_context():
         status=ApplicationStatus.APPLIED,
     )
     db.session.add(application2)
+
+    # An open offer, so the student's accept / decline flow has something to act
+    # on the moment the database is seeded.
+    application3 = Application(
+        studentId=student1.id,
+        driveId=drive3.id,
+        status=ApplicationStatus.OFFER,
+        feedback="Offer extended — please confirm through the portal.",
+    )
+    db.session.add(application3)
 
     db.session.commit()
 

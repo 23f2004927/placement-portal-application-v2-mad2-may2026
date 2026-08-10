@@ -20,18 +20,25 @@ D = DriveStatus
 # A student may withdraw only before anyone has committed time to them.
 REVOKABLE = {S.APPLIED, S.SHORTLISTED}
 
-# What a company may move an application TO...
-COMPANY_SETTABLE = {S.SHORTLISTED, S.INTERVIEW, S.OFFER, S.REJECTED, S.PLACED}
+# What a company may move an application TO. PLACED is deliberately ABSENT: a
+# placement means the student accepted, and only the student can say that.
+COMPANY_SETTABLE = {S.SHORTLISTED, S.INTERVIEW, S.OFFER, S.REJECTED}
 
 # ...and the states it may move FROM. REVOKED and the terminal states are absent
 # on purpose: once a student withdraws or a decision lands, the row is frozen.
 COMPANY_SETTABLE_FROM = {S.APPLIED, S.SHORTLISTED, S.INTERVIEW, S.OFFER}
 
-# Companies never see withdrawn applications.
+# Companies never see withdrawn applications. DECLINED is NOT hidden — a student
+# turning an offer down is information the company needs.
 HIDDEN_FROM_COMPANY = {S.REVOKED}
 
-# A letter can only follow an offer that actually exists.
-OFFER_LETTER_ISSUABLE = {S.OFFER}
+# The student's side of an offer: accept it, or turn it down.
+OFFER_RESPONDABLE = {S.OFFER}
+STUDENT_OFFER_DECISIONS = {S.PLACED, S.DECLINED}
+
+# PLACED is included so a company that forgot to issue the letter before the
+# student accepted is not locked out of issuing it afterwards.
+OFFER_LETTER_ISSUABLE = {S.OFFER, S.PLACED}
 
 
 
@@ -50,9 +57,13 @@ def capabilities_for(role):
     }
 
     issue_offer_letter = {"allowedFrom": _values(OFFER_LETTER_ISSUABLE)}
+    respond_to_offer = {
+        "options": _values(STUDENT_OFFER_DECISIONS),
+        "allowedFrom": _values(OFFER_RESPONDABLE),
+    }
 
     if role == "student":
-        return {"revoke": revoke}
+        return {"revoke": revoke, "respondToOffer": respond_to_offer}
     if role == "company":
         return {"setStatus": set_status, "issueOfferLetter": issue_offer_letter}
     if role == "admin":
@@ -60,12 +71,23 @@ def capabilities_for(role):
             "revoke": revoke,
             "setStatus": set_status,
             "issueOfferLetter": issue_offer_letter,
+            "respondToOffer": respond_to_offer,
         }
     return {}
 
 
 def can_revoke(application, role):
     return role in ("student", "admin") and application.status in REVOKABLE
+
+
+def can_respond_to_offer(application, role, new_status):
+    """Accepting or declining is the student's own call — a company cannot mark
+    someone placed on their behalf, which is why PLACED left COMPANY_SETTABLE."""
+    return (
+        role in ("student", "admin")
+        and new_status in STUDENT_OFFER_DECISIONS
+        and application.status in OFFER_RESPONDABLE
+    )
 
 
 def can_issue_offer_letter(application, role):

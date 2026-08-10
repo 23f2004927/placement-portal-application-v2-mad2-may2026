@@ -11,13 +11,16 @@ export const applicationStatuses = [
   { value: 'shortlisted', text: 'Shortlisted' },
   { value: 'interview', text: 'Interview' },
   { value: 'offer', text: 'Offer' },
+  // 'rejected' is the company turning the student down; 'declined' is the
+  // student turning the company down.
   { value: 'rejected', text: 'Rejected' },
+  { value: 'declined', text: 'Declined' },
   { value: 'placed', text: 'Placed' },
   { value: 'revoked', text: 'Withdrawn' },
 ]
 
 // Companies never receive withdrawn applications, so offering the filter would
-// only ever return nothing.
+// only ever return nothing. 'declined' stays — a company needs to see it.
 export const companyVisibleStatuses = applicationStatuses.filter((s) => s.value !== 'revoked')
 
 export const driveStatuses = [

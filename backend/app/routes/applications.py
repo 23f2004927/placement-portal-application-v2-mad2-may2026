@@ -15,6 +15,7 @@ from app.models import Application, ApplicationStatus, Drive, DriveStatus, Offer
 from app.policies import (
     HIDDEN_FROM_COMPANY,
     can_issue_offer_letter,
+    can_respond_to_offer,
     can_revoke,
     can_set_status,
     capabilities_for,
@@ -153,6 +154,39 @@ def revoke_application(application_id):
 
     application.status = ApplicationStatus.REVOKED
     db.session.commit()
+    invalidate("drives")
+
+    return jsonify(serialize_application(application, role)), 200
+
+
+@applications_bp.route("/applications/<int:application_id>/respond", methods=["POST"])
+@jwt_required()
+def respond_to_offer(application_id):
+    """The student's answer to an offer.
+
+    A separate verb rather than the generic PATCH, mirroring /revoke: the payload
+    is one constrained choice, and it keeps PATCH company/admin-only.
+    """
+    role = current_role()
+    application = _load_owned(application_id, role)
+    if application is None:
+        return jsonify(message="Application not found."), 404
+
+    decision = (request.get_json(silent=True) or {}).get("decision")
+    if decision not in ("accept", "decline"):
+        return jsonify(message="Decision must be accept or decline."), 400
+
+    new_status = (
+        ApplicationStatus.PLACED if decision == "accept" else ApplicationStatus.DECLINED
+    )
+
+    if not can_respond_to_offer(application, role, new_status):
+        return jsonify(message="There is no open offer to respond to."), 409
+
+    application.status = new_status
+    db.session.commit()
+
+    # Placement changes the counts the drive payload carries.
     invalidate("drives")
 
     return jsonify(serialize_application(application, role)), 200

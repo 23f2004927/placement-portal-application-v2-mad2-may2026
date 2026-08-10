@@ -5,7 +5,12 @@ import StatusBadge from '@/components/common/StatusBadge.vue'
 import ModalDialog from '@/components/common/ModalDialog.vue'
 import { useTableFilters } from '@/composables/useTableFilters'
 import { useCapabilities } from '@/composables/useCapabilities'
-import { fetchApplications, revokeApplication, downloadOfferLetter } from '@/services/applications'
+import {
+  fetchApplications,
+  revokeApplication,
+  respondToOffer,
+  downloadOfferLetter,
+} from '@/services/applications'
 import { startExport, exportState, downloadExport } from '@/services/exports'
 
 const columns = [
@@ -52,6 +57,26 @@ async function confirmWithdraw() {
   } catch (err) {
     error.value = err.response?.data?.message ?? 'Could not withdraw that application.'
     withdrawing.value = null
+  } finally {
+    busy.value = false
+  }
+}
+
+/*
+  Accepting is what makes a student PLACED — the company cannot set that status
+  at all, so this is the only route to it.
+*/
+const responding = ref(null)
+
+async function confirmResponse() {
+  busy.value = true
+  try {
+    await respondToOffer(responding.value.row.id, responding.value.decision)
+    responding.value = null
+    await load()
+  } catch (err) {
+    error.value = err.response?.data?.message ?? 'Could not record that response.'
+    responding.value = null
   } finally {
     busy.value = false
   }
@@ -125,6 +150,24 @@ onMounted(load)
       </template>
 
       <template #actions="{ row }">
+        <BButton
+          v-if="can('respondToOffer', row)"
+          variant="link"
+          size="sm"
+          @click="responding = { row, decision: 'accept' }"
+        >
+          Accept
+        </BButton>
+        <BButton
+          v-if="can('respondToOffer', row)"
+          variant="link"
+          size="sm"
+          class="text-danger"
+          @click="responding = { row, decision: 'decline' }"
+        >
+          Decline
+        </BButton>
+
         <BButton variant="link" size="sm" :disabled="!row.feedback" @click="viewing = row">
           Feedback
         </BButton>
@@ -144,6 +187,27 @@ onMounted(load)
         </BButton>
       </template>
     </DataTable>
+
+    <ModalDialog
+      :model-value="!!responding"
+      :title="responding?.decision === 'accept' ? 'Accept this offer?' : 'Decline this offer?'"
+      :confirm-text="responding?.decision === 'accept' ? 'Accept offer' : 'Decline offer'"
+      :confirm-variant="responding?.decision === 'accept' ? 'primary' : 'danger'"
+      :busy="busy"
+      @update:model-value="responding = null"
+      @confirm="confirmResponse"
+    >
+      <p class="mb-2">
+        <strong>{{ responding?.row.driveTitle }}</strong> at {{ responding?.row.companyName }}
+      </p>
+      <p class="muted mb-0">
+        {{
+          responding?.decision === 'accept'
+            ? 'You will be recorded as placed for this role. Your other applications stay open — withdraw any you no longer want.'
+            : 'The company will see that you turned this offer down. This cannot be undone.'
+        }}
+      </p>
+    </ModalDialog>
 
     <ModalDialog
       :model-value="!!withdrawing"

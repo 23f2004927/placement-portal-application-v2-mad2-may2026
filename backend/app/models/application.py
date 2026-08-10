@@ -14,7 +14,11 @@ class ApplicationStatus(enum.Enum):
     SHORTLISTED = "shortlisted"
     INTERVIEW = "interview"
     OFFER = "offer"
+    # REJECTED is the COMPANY turning the student down. DECLINED is the student
+    # turning the company down. Separate members on purpose: collapsing them
+    # would leave a company unable to tell which of the two happened.
     REJECTED = "rejected"
+    DECLINED = "declined"
     PLACED = "placed"
     # Withdrawn by the student (or revoked by an admin). The row is kept rather
     # than deleted so the UniqueConstraint below still blocks re-application;

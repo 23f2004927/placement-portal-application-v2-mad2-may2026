@@ -16,6 +16,9 @@ const VARIANTS = {
   approved: 'success',
   placed: 'success',
   rejected: 'danger',
+  // The student turned the offer down — an outcome, not a failure, so it is
+  // toned apart from the company's 'rejected'.
+  declined: 'warning',
   revoked: 'light',
   closed: 'light',
 }

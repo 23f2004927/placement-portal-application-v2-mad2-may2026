@@ -16,6 +16,12 @@ export async function revokeApplication(id) {
   return res.data
 }
 
+// decision is 'accept' (-> placed) or 'decline' (-> declined).
+export async function respondToOffer(id, decision) {
+  const res = await api.post(`/applications/${id}/respond`, { decision })
+  return res.data
+}
+
 export async function updateApplication(id, payload) {
   const res = await api.patch(`/applications/${id}`, payload)
   return res.data
