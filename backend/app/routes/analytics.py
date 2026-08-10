@@ -23,6 +23,7 @@ from app.models import (
     Company,
     Drive,
     DriveStatus,
+    Placement,
     Student,
     User,
 )
@@ -268,13 +269,11 @@ def admin_analytics():
         return {
             "months": _recent_months(),
             "applications": _monthly(Application.appliedAt),
-            # NOTE: approximate. statusUpdatedAt holds only the LAST change, so
-            # editing a placed row later moves it into the wrong month. Exact
-            # history needs an event log.
-            "placements": _monthly(
-                Application.statusUpdatedAt,
-                Application.status == ApplicationStatus.PLACED,
-            ),
+            # Exact, unlike every other stage: Placement.placedAt records when
+            # the student accepted and is never rewritten, where statusUpdatedAt
+            # holds only the LAST change and would move a row into the wrong
+            # month if anything touched it afterwards.
+            "placements": _monthly(Placement.placedAt, model=Placement),
             "funnel": _funnel(),
             "topSkills": _top_skills(),
             "offerOutcomes": _offer_outcomes(),
@@ -305,8 +304,10 @@ def company_analytics():
         return {
             "months": _recent_months(),
             "applications": _monthly(Application.appliedAt, mine),
+            # Straight off companyId — the placement register already knows who
+            # placed whom, so this needs none of the join `mine` exists for.
             "placements": _monthly(
-                Application.statusUpdatedAt, mine, Application.status == ApplicationStatus.PLACED
+                Placement.placedAt, Placement.companyId == company.id, model=Placement
             ),
             "funnel": _funnel(mine),
             "offerOutcomes": _offer_outcomes(mine),
@@ -364,10 +365,7 @@ def public_stats():
             # --- series -----------------------------------------------------
             "months": _recent_months(),
             "applications": _monthly(Application.appliedAt),
-            "placements": _monthly(
-                Application.statusUpdatedAt,
-                Application.status == ApplicationStatus.PLACED,
-            ),
+            "placements": _monthly(Placement.placedAt, model=Placement),
             "drivesCumulative": _cumulative(drives_monthly),
             # --- breakdowns, both safe: properties of postings, not people ---
             "topSkills": _top_skills(),

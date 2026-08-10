@@ -23,6 +23,7 @@ from app.models import (
     ApplicationStatus,
     Company,
     Drive,
+    Placement,
     Role,
     User,
 )
@@ -57,10 +58,19 @@ def monthly_placement_report():
     def ended_as(status):
         return applications_where(Application.statusUpdatedAt, Application.status == status)
 
+    # Placements are the exception, and the only exact figure here: placedAt is
+    # written once when the student accepts and never rewritten.
+    placed = (
+        db.session.query(db.func.count(Placement.id))
+        .filter(db.func.date(Placement.placedAt) >= first, db.func.date(Placement.placedAt) <= last)
+        .scalar()
+        or 0
+    )
+
     stats = {
         "newApplications": applications_where(Application.appliedAt),
-        "offers": ended_as(ApplicationStatus.OFFER) + ended_as(ApplicationStatus.PLACED),
-        "placed": ended_as(ApplicationStatus.PLACED),
+        "offers": ended_as(ApplicationStatus.OFFER) + placed,
+        "placed": placed,
         "rejected": ended_as(ApplicationStatus.REJECTED),
         "declined": ended_as(ApplicationStatus.DECLINED),
         "drivesPosted": (
@@ -71,17 +81,17 @@ def monthly_placement_report():
         ),
     }
 
+    # One join instead of two: the register carries companyId directly, so this
+    # no longer has to route through Drive to find out who placed whom.
     companies = (
-        db.session.query(Company.name, db.func.count(Application.id))
-        .join(Drive, Drive.companyId == Company.id)
-        .join(Application, Application.driveId == Drive.id)
+        db.session.query(Company.name, db.func.count(Placement.id))
+        .join(Placement, Placement.companyId == Company.id)
         .filter(
-            Application.status == ApplicationStatus.PLACED,
-            db.func.date(Application.statusUpdatedAt) >= first,
-            db.func.date(Application.statusUpdatedAt) <= last,
+            db.func.date(Placement.placedAt) >= first,
+            db.func.date(Placement.placedAt) <= last,
         )
         .group_by(Company.name)
-        .order_by(db.func.count(Application.id).desc())
+        .order_by(db.func.count(Placement.id).desc())
         .all()
     )
 
