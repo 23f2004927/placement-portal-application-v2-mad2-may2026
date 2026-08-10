@@ -40,6 +40,7 @@ from app.models import (
     JobType,
     Notification,
     OfferLetter,
+    Placement,
     Role,
     Student,
     User,
@@ -114,6 +115,26 @@ COMPANIES = [
     ("Strand Biotech", "Biotech", "Hyderabad", "strand"),
 ]
 
+# A student's own skills are drawn from the same vocabulary the drives use, so
+# the ATS screener and the skill search have something real to match against.
+BENEFITS = [
+    "Health insurance, annual learning budget, hybrid working.",
+    "Relocation support, subsidised meals, quarterly bonus.",
+    "Health cover for family, paid certifications, flexible hours.",
+    "Stock options after 12 months, gym reimbursement, 24 days leave.",
+    None,
+]
+
+EXPERIENCE_ASKED = ["Fresher", "0–1 years", "0–2 years", "1–3 years", None]
+
+EXPERIENCE_HAD = [
+    "Summer internship at a product startup; built and shipped two internal tools.",
+    "Two semester-long projects and a 3-month remote internship.",
+    "Final-year capstone plus freelance work for a local business.",
+    "Teaching assistant for two courses; several open-source contributions.",
+    None,
+]
+
 ROLES = [
     ("Software Engineer", ["Python", "SQL", "Git"]),
     ("Backend Developer", ["Python", "Flask", "PostgreSQL", "REST"]),
@@ -130,6 +151,9 @@ ROLES = [
     ("Process Engineer", ["Chemical Processes", "Safety", "Excel"]),
     ("Research Associate", ["Lab Techniques", "Statistics", "Reporting"]),
 ]
+
+# Every skill any drive asks for, so a student's own list overlaps meaningfully.
+ALL_SKILLS = sorted({skill for _, skills in ROLES for skill in skills})
 
 
 def past(days_min, days_max):
@@ -238,6 +262,8 @@ with app.app_context():
             gradeYear=random.choice([2026, 2027, 2028]),
             cgpa=round(random.uniform(5.2, 9.8), 2),
             links={"github": f"https://github.com/student{i}"} if i % 3 == 0 else None,
+            skills=random.sample(ALL_SKILLS, random.randint(3, 7)),
+            experience=random.choice(EXPERIENCE_HAD),
             userId=user.id,
         )
         db.session.add(student)
@@ -289,17 +315,27 @@ with app.app_context():
                 # is only interesting when some drives restrict and some don't.
                 # Weighted the same way as the cohort, so a restricted drive
                 # still has real candidates to draw from.
+                # Criteria COMPOUND, and they are now enforced rather than
+                # advisory: a drive restricting all three axes at once is one
+                # almost nobody can apply to. Each is therefore unset most of
+                # the time, which leaves every student a real shortlist.
                 branch=random.choices(branches, weights=branch_weights, k=1)[0]
-                if random.random() < 0.35
+                if random.random() < 0.25
                 else None,
-                minCgpa=random.choice([None, 6.0, 6.5, 7.0, 7.5, 8.0]),
-                eligibleYear=random.choice([None, 2026, 2027]),
+                minCgpa=random.choices(
+                    [None, 6.0, 6.5, 7.0, 7.5], weights=[40, 15, 15, 15, 15], k=1
+                )[0],
+                eligibleYear=random.choices([None, 2026, 2027], weights=[55, 25, 20], k=1)[0],
                 skillsRequired=random.sample(skills, k=min(len(skills), random.randint(2, 4))),
+                experienceRequired=random.choice(EXPERIENCE_ASKED),
                 salary=salary,
+                benefits=random.choice(BENEFITS),
                 numOpenings=random.randint(1, 8),
                 jobType=job_type,
-                # Some deadlines have passed, some have not.
-                applicationDeadline=NOW + timedelta(days=random.randint(-40, 45)),
+                # Weighted toward the future so there is a browsable set of open
+                # drives; the expired ones keep "closed" reachable.
+                applicationDeadline=NOW
+                + timedelta(days=random.choice([*range(-40, 0), *range(1, 61), *range(1, 61)])),
                 status=status,
                 createdAt=created,
                 updatedAt=created,
@@ -321,16 +357,19 @@ with app.app_context():
         drive.id: [s for s in students if not drive_ineligibility(drive, s)] for drive in drives
     }
 
-    for _ in range(420):
+    # More attempts than before: now that only eligible pairs are allowed, each
+    # draw comes from a smaller pool and collides with an existing pair sooner.
+    for _ in range(900):
         drive = random.choice(drives)
         pool = eligible_for[drive.id]
 
-        # Four in five applicants meet the stated criteria; the rest apply
-        # anyway, which is exactly the behaviour advisory criteria allow for.
-        if pool and random.random() < 0.8:
-            student = random.choice(pool)
-        else:
-            student = random.choice(students)
+        # Only eligible students, because that is now the only way an
+        # application can be created — POST /api/applications rejects the rest.
+        # `belowCriteria` on the company's list is still reachable in real use:
+        # a company that TIGHTENS its criteria after applications arrive.
+        if not pool:
+            continue
+        student = random.choice(pool)
 
         key = (student.id, drive.id)
         if key in seen:
@@ -396,6 +435,24 @@ with app.app_context():
                     salary=drive.salary,
                     joiningDate=application.joiningDate,
                     issuedAt=application.statusUpdatedAt,
+                )
+            )
+
+    # ------------------------------------------------------------ placements --
+    # One per accepted offer, exactly as POST /applications/<id>/respond writes
+    # it. Seeding the status without the register would leave the two disagreeing.
+    for application in applications:
+        if application.status is ApplicationStatus.PLACED:
+            drive = application.drive
+            db.session.add(
+                Placement(
+                    studentId=application.studentId,
+                    companyId=drive.companyId,
+                    applicationId=application.id,
+                    position=drive.title,
+                    salary=application.finalSalary,
+                    joiningDate=application.joiningDate,
+                    placedAt=application.statusUpdatedAt,
                 )
             )
 

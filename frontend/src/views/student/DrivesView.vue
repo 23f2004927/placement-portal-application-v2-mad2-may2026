@@ -67,8 +67,9 @@ async function confirmApply() {
         <span v-for="skill in value ?? []" :key="skill" class="skill">{{ skill }}</span>
       </template>
 
-      <!-- Advisory, not a gate: the company sets these criteria as a preference
-           and Apply stays enabled either way. -->
+      <!-- The drive stays listed when the student doesn't qualify — hiding it
+           would leave them unable to see what they'd need. Apply is what's
+           disabled, and the badge says why. -->
       <template #cell-eligible="{ row }">
         <BBadge v-if="row.eligible" variant="success" class="match">Meets criteria</BBadge>
         <BBadge
@@ -83,7 +84,8 @@ async function confirmApply() {
 
       <template #actions="{ row }">
         <BButton variant="link" size="sm"
-          :disabled="row.alreadyApplied"
+          :disabled="row.alreadyApplied || !row.eligible"
+          :title="row.eligible ? '' : row.ineligibleReasons.join(' · ')"
           @click="applying = row"
         >
           {{ row.alreadyApplied ? 'Applied' : 'Apply' }}
@@ -102,16 +104,6 @@ async function confirmApply() {
       <p class="mb-2">
         <strong>{{ applying?.title }}</strong> at {{ applying?.companyName }}
       </p>
-      <BAlert
-        v-if="applying && !applying.eligible"
-        :model-value="true"
-        variant="secondary"
-        class="mb-2 below"
-      >
-        You are outside this drive's stated criteria ({{ applying.ineligibleReasons.join(' · ') }}).
-        You can still apply — the company decides.
-      </BAlert>
-
       <p class="muted mb-0">
         Your profile is shared with the company. You can withdraw while the application is still
         being reviewed.
@@ -139,10 +131,6 @@ async function confirmApply() {
   font-weight: 600;
   white-space: normal;
   text-align: left;
-}
-
-.below {
-  font-size: 0.8125rem;
 }
 
 </style>

@@ -18,6 +18,7 @@ from app.models import (
     Drive,
     DriveStatus,
     OfferLetter,
+    Placement,
     Student,
 )
 from app.policies import (
@@ -27,6 +28,7 @@ from app.policies import (
     can_revoke,
     can_set_status,
     capabilities_for,
+    drive_ineligibility,
 )
 from app.serializers import serialize_application
 from app.utils.caching import invalidate
@@ -153,6 +155,21 @@ def create_application():
     if drive is None or drive.status != DriveStatus.APPROVED:
         return jsonify(message="That drive is not open for applications."), 404
 
+    # The list already hides expired drives, but a tab left open overnight still
+    # holds a live id. The list is a view; this is the guarantee.
+    if drive.applicationDeadline is not None and drive.applicationDeadline < datetime.now():
+        return jsonify(message="Applications for this drive have closed."), 409
+
+    # Eligibility is enforced here, not merely annotated. The serializer runs the
+    # same function so the student is told why before they click, and the two
+    # answers cannot disagree — it is one function with two callers.
+    reasons = drive_ineligibility(drive, student)
+    if reasons:
+        return jsonify(
+            message="You do not meet the eligibility criteria for this drive.",
+            reasons=reasons,
+        ), 403
+
     application = Application(
         studentId=student.id,
         driveId=drive.id,
@@ -219,6 +236,23 @@ def respond_to_offer(application_id):
         return jsonify(message="There is no open offer to respond to."), 409
 
     application.status = new_status
+
+    # Accepting is what creates the placement record. It reads from the offer
+    # letter when one exists, because those are the terms the student agreed
+    # to; otherwise it falls back to what the drive currently advertises.
+    if new_status is ApplicationStatus.PLACED and application.placement is None:
+        letter = application.offerLetter
+        db.session.add(
+            Placement(
+                studentId=application.studentId,
+                companyId=application.drive.companyId,
+                applicationId=application.id,
+                position=letter.roleTitle if letter else application.drive.title,
+                salary=(letter.salary if letter else None) or application.drive.salary,
+                joiningDate=(letter.joiningDate if letter else None) or application.joiningDate,
+            )
+        )
+
     db.session.commit()
 
     # Placement changes the counts the drive payload carries.

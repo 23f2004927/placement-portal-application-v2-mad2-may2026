@@ -149,12 +149,17 @@ def can_moderate_drive(drive, role):
 
 
 def drive_ineligibility(drive, student):
-    """Why this student falls outside the drive's STATED criteria.
+    """Why this student falls outside the drive's criteria.
 
-    Empty list means they meet everything. This is advisory, never a gate:
-    the criteria are the company's stated preference, not a rule the portal
-    enforces, so the student still sees the drive and can still apply. The
-    company gets the same flag on the application and decides for itself.
+    Empty list means they meet everything, and only then may they apply.
+
+    Two callers, as everywhere else in this module: the drive serializer, which
+    ADVERTISES the reasons so the student is told before clicking, and
+    POST /api/applications, which ENFORCES them. One function, so the badge on
+    the row and the 403 from the endpoint can never disagree.
+
+    The drive is still listed either way — hiding it would leave the student
+    unable to see what they would need to qualify.
 
     A NULL criterion means no restriction on that axis.
     """
