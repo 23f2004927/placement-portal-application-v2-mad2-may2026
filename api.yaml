@@ -9,7 +9,7 @@ info:
     the rules.
 
 
-    Generated from the live Flask url_map by `backend/gen_api_spec.py`.'
+    Covers every route the application serves: 32 paths, 39 operations.'
   contact:
     name: Christiano Fernandes
   title: Placement Portal Application — V2
