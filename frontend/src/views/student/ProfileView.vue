@@ -1,7 +1,14 @@
 <script setup>
 import { reactive, ref, onMounted } from 'vue'
 import StudentFields from '@/components/register/StudentFields.vue'
-import { fetchStudentProfile, saveStudentProfile } from '@/services/profile'
+import {
+  fetchStudentProfile,
+  saveStudentProfile,
+  uploadResume,
+  deleteResume,
+  openResume,
+} from '@/services/profile'
+import { formatDate } from '@/utils/dates'
 import { useAuth } from '@/stores/auth'
 
 const auth = useAuth()
@@ -20,11 +27,18 @@ const form = reactive({
 })
 
 const links = reactive({ github: '', linkedin: '', portfolio: '' })
-const resume = ref('')
 const fieldErrors = reactive({})
 const errorMsg = ref('')
 const savedMsg = ref('')
 const saving = ref(false)
+
+// The resume is its own request, so it carries its own state rather than
+// riding on the form's — an upload failing must not read as "profile not saved".
+const studentId = ref(null)
+const resumeUploadedAt = ref(null)
+const resumeFile = ref(null)
+const resumeBusy = ref(false)
+const resumeError = ref('')
 
 function clearFieldErrors() {
   Object.keys(fieldErrors).forEach((k) => delete fieldErrors[k])
@@ -44,7 +58,8 @@ onMounted(async () => {
       cgpa: data.cgpa ?? '',
     })
     Object.assign(links, { github: '', linkedin: '', portfolio: '', ...(data.links ?? {}) })
-    resume.value = data.resume ?? ''
+    studentId.value = data.id
+    resumeUploadedAt.value = data.resumeUploadedAt
   } catch (err) {
     errorMsg.value = err.response?.data?.message ?? 'Could not load your profile.'
   }
@@ -58,13 +73,53 @@ async function handleSubmit() {
   try {
     // rollNumber is read-only server-side, so it is not sent.
     const { rollNumber, ...editable } = form
-    await saveStudentProfile({ ...editable, links, resume: resume.value })
+    await saveStudentProfile({ ...editable, links })
     savedMsg.value = 'Profile updated.'
   } catch (err) {
     errorMsg.value = err.response?.data?.message ?? 'Could not save your profile.'
     Object.assign(fieldErrors, err.response?.data?.errors ?? {})
   } finally {
     saving.value = false
+  }
+}
+
+// BFormFile gives a File or null; the picker is cleared after either action so
+// the same file can be chosen again if the first attempt was rejected.
+async function submitResume() {
+  if (!resumeFile.value) return
+  resumeError.value = ''
+  resumeBusy.value = true
+  try {
+    const data = await uploadResume(resumeFile.value)
+    resumeUploadedAt.value = data.resumeUploadedAt
+    resumeFile.value = null
+  } catch (err) {
+    resumeError.value = err.response?.data?.message ?? 'Could not upload that file.'
+  } finally {
+    resumeBusy.value = false
+  }
+}
+
+async function removeResume() {
+  resumeError.value = ''
+  resumeBusy.value = true
+  try {
+    await deleteResume()
+    resumeUploadedAt.value = null
+    resumeFile.value = null
+  } catch (err) {
+    resumeError.value = err.response?.data?.message ?? 'Could not remove your resume.'
+  } finally {
+    resumeBusy.value = false
+  }
+}
+
+async function viewResume() {
+  resumeError.value = ''
+  try {
+    await openResume(studentId.value)
+  } catch {
+    resumeError.value = 'Could not open your resume.'
   }
 }
 </script>
@@ -113,11 +168,6 @@ async function handleSubmit() {
             <BFormInput id="link-portfolio" v-model="links.portfolio" type="url" placeholder="https://" />
           </BFormGroup>
         </BCol>
-        <BCol md="12">
-          <BFormGroup label="Resume URL" label-for="resume" description="Link to a hosted PDF">
-            <BFormInput id="resume" v-model="resume" type="url" placeholder="https://" />
-          </BFormGroup>
-        </BCol>
       </BRow>
 
       <div class="form-actions">
@@ -126,6 +176,45 @@ async function handleSubmit() {
         </BButton>
       </div>
     </BForm>
+
+    <!-- Outside the form on purpose: uploading is its own request, not part of
+         "Save changes", so it must not be submitted with the rest. -->
+    <section class="profile-form resume-card">
+      <p class="section-label">Resume</p>
+
+      <BAlert v-if="resumeError" :model-value="true" variant="danger">{{ resumeError }}</BAlert>
+
+      <div class="resume-state">
+        <span v-if="resumeUploadedAt">Uploaded {{ formatDate(resumeUploadedAt) }}</span>
+        <span v-else class="muted">No resume uploaded</span>
+
+        <template v-if="resumeUploadedAt">
+          <BButton variant="link" size="sm" @click="viewResume">View</BButton>
+          <BButton variant="link" size="sm" :disabled="resumeBusy" @click="removeResume">
+            Remove
+          </BButton>
+        </template>
+      </div>
+
+      <div class="resume-pick">
+        <BFormFile
+          v-model="resumeFile"
+          accept="application/pdf"
+          size="sm"
+          :placeholder="resumeUploadedAt ? 'Choose a PDF to replace it…' : 'Choose a PDF…'"
+        />
+        <BButton
+          variant="primary"
+          size="sm"
+          :disabled="!resumeFile || resumeBusy"
+          @click="submitResume"
+        >
+          {{ resumeBusy ? 'Uploading…' : 'Upload' }}
+        </BButton>
+      </div>
+
+      <p class="hint">PDF only, up to 2 MB. Companies you have applied to can open it.</p>
+    </section>
   </div>
 </template>
 
@@ -157,5 +246,34 @@ async function handleSubmit() {
   display: flex;
   justify-content: flex-end;
   margin-top: 24px;
+}
+
+.resume-card {
+  margin-top: 16px;
+}
+
+.resume-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 0.875rem;
+}
+
+.resume-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 480px;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.hint {
+  margin: 10px 0 0;
+  color: var(--text-muted);
+  font-size: 0.75rem;
 }
 </style>

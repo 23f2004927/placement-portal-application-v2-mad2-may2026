@@ -5,6 +5,7 @@ import ModalDialog from '@/components/common/ModalDialog.vue'
 import { useServerTable } from '@/composables/useServerTable'
 import { useCapabilities } from '@/composables/useCapabilities'
 import { fetchStudents, moderateStudent } from '@/services/admin'
+import { openResume } from '@/services/profile'
 
 const columns = [
   { key: 'name', label: 'Name' , sortable: true },
@@ -23,6 +24,14 @@ const { can } = useCapabilities(capabilities, 'accountStatus')
 
 const pending = ref(null)
 const busy = ref(false)
+
+async function resume(row) {
+  try {
+    await openResume(row.id)
+  } catch {
+    error.value = 'Could not open that resume.'
+  }
+}
 
 async function confirm() {
   busy.value = true
@@ -61,6 +70,14 @@ async function confirm() {
       </template>
 
       <template #actions="{ row }">
+        <BButton
+          variant="link"
+          size="sm"
+          :disabled="!row.resumeUploadedAt"
+          @click="resume(row)"
+        >
+          Resume
+        </BButton>
         <BButton
           variant="link"
           size="sm"

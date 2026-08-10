@@ -4,7 +4,7 @@
 # application factory
 
 
-from flask import Flask
+from flask import Flask, jsonify
 
 from app.celery_app import celery_init_app
 from app.config import Config
@@ -19,6 +19,7 @@ from app.routes import (
     exports_bp,
     notifications_bp,
     profile_bp,
+    resumes_bp,
     stats_bp,
     students_bp,
 )
@@ -38,6 +39,15 @@ def create_app():
     app.register_blueprint(exports_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(ats_bp)
+    app.register_blueprint(resumes_bp)
+
+    # MAX_CONTENT_LENGTH aborts before the view runs and Flask's default 413 is
+    # HTML, which the frontend reads as an empty message. This makes it JSON so
+    # the student sees why the upload failed.
+    @app.errorhandler(413)
+    def too_large(error):
+        return jsonify(message="That file is too large. Maximum 2 MB."), 413
+
     db.init_app(app)
     jwt.init_app(app)
     cors.init_app(app, origins=["http://localhost:5173"])

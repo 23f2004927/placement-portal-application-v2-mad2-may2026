@@ -11,6 +11,7 @@ import {
   issueOfferLetter,
   downloadOfferLetter,
 } from '@/services/applications'
+import { openResume } from '@/services/profile'
 
 const columns = [
   { key: 'studentName', label: 'Candidate' , sortable: true },
@@ -88,6 +89,16 @@ async function download(row) {
   }
 }
 
+// The endpoint re-checks that this candidate applied to one of our drives, so a
+// disabled button here is a convenience, not the control.
+async function resume(row) {
+  try {
+    await openResume(row.studentId)
+  } catch {
+    error.value = 'Could not open that resume.'
+  }
+}
+
 </script>
 
 <template>
@@ -125,6 +136,14 @@ async function download(row) {
           @click="openStatus(row)"
         >
           Update
+        </BButton>
+        <BButton
+          variant="link"
+          size="sm"
+          :disabled="!row.resumeUploadedAt"
+          @click="resume(row)"
+        >
+          Resume
         </BButton>
         <BButton
           v-if="row.offerLetterIssuedAt"

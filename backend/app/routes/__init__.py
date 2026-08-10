@@ -8,4 +8,5 @@ from app.routes.analytics import analytics_bp
 from app.routes.ats import ats_bp
 from app.routes.exports import exports_bp
 from app.routes.notifications import notifications_bp
+from app.routes.resumes import resumes_bp
 from app.routes.students import students_bp

@@ -4,6 +4,10 @@
 # Student / Company -> JSON for the profile screens
 
 
+def _iso(value):
+    return value.isoformat() if value else None
+
+
 def serialize_student(student,viewer_role):
     data=  {
         "id": student.id,
@@ -16,7 +20,9 @@ def serialize_student(student,viewer_role):
         "gradeYear": student.gradeYear,
         "cgpa": student.cgpa,
         "links": student.links or {},
-        "resume": student.resume,
+        # Presence only. The filename is never sent — the file is reachable
+        # through /api/students/<id>/resume or not at all.
+        "resumeUploadedAt": _iso(student.resumeUploadedAt),
         "userName": student.user.userName,
         "accountStatus": student.user.accountStatus.value,
     }

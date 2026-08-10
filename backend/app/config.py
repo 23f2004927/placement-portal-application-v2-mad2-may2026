@@ -26,6 +26,10 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "dev-secret-change-me")
 
+    # Caps the request BODY, so an oversized upload is refused before Flask
+    # buffers it. Global — it applies to JSON posts too, which is harmless.
+    MAX_CONTENT_LENGTH = 2 * 1024 * 1024
+
     # Separate Redis databases on purpose: flushing the cache must never be able
     # to drop queued jobs or their results.
     #   /0 broker · /1 results · /2 cache

@@ -40,5 +40,6 @@ class Student(db.Model):
     cgpa = db.Column(db.Float(10), nullable=False)
     links = db.Column(db.JSON, nullable=True)
     resume = db.Column(db.String(255), nullable=True)
+    resumeUploadedAt = db.Column(db.DateTime, nullable=True)
     userId = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, unique=True)
     user = db.relationship("User", backref=db.backref("student", uselist=False))

@@ -52,6 +52,8 @@ def serialize_application(application, viewer_role):
             email=student.email,
             belowCriteria=bool(reasons),
             criteriaMissed=reasons,
+            # Presence, like offerLetterIssuedAt above, is what enables the button.
+            resumeUploadedAt=_iso(student.resumeUploadedAt),
         )
 
     if viewer_role == "admin":

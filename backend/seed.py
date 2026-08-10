@@ -18,12 +18,16 @@
 # random.seed() is fixed, so re-running produces the same database.
 
 
+import argparse
+import os
 import random
+import shutil
 from datetime import date, datetime, timedelta
 
 from app import create_app
 from app.extensions import db
 from app.policies import drive_ineligibility
+from app.routes.resumes import PDF_MAGIC, resume_dir, stored_name
 from app.models import (
     AccountStatus,
     Admin,
@@ -42,6 +46,14 @@ from app.models import (
 )
 
 random.seed(7)
+
+# Optional, because the repo carries no PDF: point it at any real one and every
+# student gets a copy as their resume, so the company applicant list has
+# something to open on a fresh seed.
+#   python seed.py --resume ~/Downloads/blank.pdf
+parser = argparse.ArgumentParser(description="Populate the local database.")
+parser.add_argument("--resume", metavar="PATH", help="PDF to copy in as every student's resume")
+args = parser.parse_args()
 
 NOW = datetime.now()
 MONTHS_BACK = 6
@@ -143,11 +155,28 @@ def make_user(username, role, password, status=AccountStatus.APPROVED, blacklist
     return user
 
 
+def check_resume_source(path):
+    """Fail before writing 60 copies of something that isn't a PDF."""
+    if not os.path.isfile(path):
+        raise SystemExit(f"--resume: no such file: {path}")
+    with open(path, "rb") as handle:
+        if handle.read(len(PDF_MAGIC)) != PDF_MAGIC:
+            raise SystemExit(f"--resume: not a PDF: {path}")
+
+
 app = create_app()
 
 with app.app_context():
     db.drop_all()
     db.create_all()
+
+    # drop_all() clears the tables but not the disk, so PDFs from an earlier run
+    # would outlive the students they belonged to.
+    shutil.rmtree(resume_dir(), ignore_errors=True)
+
+    resume_source = os.path.expanduser(args.resume) if args.resume else None
+    if resume_source:
+        check_resume_source(resume_source)
 
     # ---------------------------------------------------------------- admin --
     admin_user = make_user("admin", Role.ADMIN, "admin123")
@@ -209,13 +238,21 @@ with app.app_context():
             gradeYear=random.choice([2026, 2027, 2028]),
             cgpa=round(random.uniform(5.2, 9.8), 2),
             links={"github": f"https://github.com/student{i}"} if i % 3 == 0 else None,
-            resume=f"https://files.example.com/resumes/student{i}.pdf" if i % 2 == 0 else None,
             userId=user.id,
         )
         db.session.add(student)
         students.append(student)
 
     db.session.flush()
+
+    # Needs the flush above: the filename is derived from student.id. Without
+    # --resume every student is left with no resume, which is also a valid state
+    # to test — the company's button greys out.
+    if resume_source:
+        for student in students:
+            shutil.copyfile(resume_source, os.path.join(resume_dir(), stored_name(student.id)))
+            student.resume = stored_name(student.id)
+            student.resumeUploadedAt = past(1, 90)
 
     # --------------------------------------------------------------- drives --
     # Spread across the whole window so the monthly and cumulative charts have
@@ -391,5 +428,6 @@ with app.app_context():
     print(f"  students      {len(students)}  (student59 blacklisted)")
     print(f"  drives        {len(drives)}  spread over the last {MONTHS_BACK} months")
     print(f"  applications  {len(applications)}  ({placed} placed)")
+    print(f"  resumes       {len(students) if resume_source else 0}  (pass --resume PATH to attach one)")
     print()
     print("  admin / admin123      company handles / company123      student1..60 / student123")
