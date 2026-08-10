@@ -92,8 +92,15 @@ def update_student_profile():
             return jsonify(message="Links must be an object."), 400
         student.links = {k: v.strip() for k, v in links.items() if isinstance(v, str) and v.strip()}
 
-    if "resume" in data:
-        student.resume = _clean(data, "resume") or None
+    # Same shape as Drive.skillsRequired: a list of trimmed, non-empty strings.
+    if "skills" in data:
+        skills = data["skills"] or []
+        if not isinstance(skills, list):
+            return jsonify(message="Skills must be a list."), 400
+        student.skills = [s.strip() for s in skills if isinstance(s, str) and s.strip()]
+
+    if "experience" in data:
+        student.experience = _clean(data, "experience") or None
 
     return _commit(serialize_student, student, "student")
 

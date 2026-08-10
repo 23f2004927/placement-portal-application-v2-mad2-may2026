@@ -20,6 +20,8 @@ def serialize_student(student,viewer_role):
         "gradeYear": student.gradeYear,
         "cgpa": student.cgpa,
         "links": student.links or {},
+        "skills": student.skills or [],
+        "experience": student.experience,
         # Presence only. The filename is never sent — the file is reachable
         # through /api/students/<id>/resume or not at all.
         "resumeUploadedAt": _iso(student.resumeUploadedAt),

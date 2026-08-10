@@ -39,6 +39,12 @@ class Student(db.Model):
     gradeYear = db.Column(db.Integer, nullable=True)
     cgpa = db.Column(db.Float(10), nullable=False)
     links = db.Column(db.JSON, nullable=True)
+    # A list of strings, same shape as Drive.skillsRequired so the two can be
+    # compared without normalising either side.
+    skills = db.Column(db.JSON, nullable=True)
+    # Free text: internships, projects, prior roles. Deliberately not modelled
+    # as rows — nothing in the portal queries inside it.
+    experience = db.Column(db.Text, nullable=True)
     resume = db.Column(db.String(255), nullable=True)
     resumeUploadedAt = db.Column(db.DateTime, nullable=True)
     userId = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, unique=True)

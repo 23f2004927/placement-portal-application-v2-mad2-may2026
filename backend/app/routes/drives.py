@@ -63,8 +63,9 @@ def _apply_payload(drive, data):
             return "Title is required."
         drive.title = title
 
-    if "description" in data:
-        drive.description = (data["description"] or "").strip() or None
+    for field in ("description", "experienceRequired", "benefits"):
+        if field in data:
+            setattr(drive, field, (data[field] or "").strip() or None)
 
     if "jobType" in data:
         try:
@@ -189,7 +190,11 @@ def _build_drives_payload(role, company, student):
     elif role == "admin":
         query = query.options(selectinload(Drive.applications))
 
-    query = search(query, [Drive.title, Company.name])
+    # skillsRequired is JSON, which SQLite stores as text — so ilike matches
+    # inside the array without a JSON function or an extra table. Crude, and
+    # it means "java" also matches "javascript"; acceptable for a search box,
+    # which is a way to narrow a list rather than an exact filter.
+    query = search(query, [Drive.title, Company.name, Drive.skillsRequired])
     query = enum_filter(query, Drive.status, DriveStatus)
     query = sort(
         query,

@@ -29,6 +29,8 @@ def serialize_drive(drive, viewer_role, applied_drive_ids=None, student=None):
         "minCgpa": drive.minCgpa,
         "eligibleYear": drive.eligibleYear,
         "skillsRequired": drive.skillsRequired or [],
+        "experienceRequired": drive.experienceRequired,
+        "benefits": drive.benefits,
         "salary": drive.salary,
         "numOpenings": drive.numOpenings,
         "applicationDeadline": _iso(drive.applicationDeadline),
@@ -45,7 +47,8 @@ def serialize_drive(drive, viewer_role, applied_drive_ids=None, student=None):
     if viewer_role == "student":
         data["alreadyApplied"] = drive.id in (applied_drive_ids or set())
 
-        # Advisory only. The drive is listed either way and Apply stays enabled.
+        # The same function the apply endpoint enforces with, so `eligible`
+        # predicts the outcome exactly rather than approximating it.
         reasons = drive_ineligibility(drive, student) if student else []
         data["eligible"] = not reasons
         data["ineligibleReasons"] = reasons

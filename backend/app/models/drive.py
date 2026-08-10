@@ -35,7 +35,12 @@ class Drive(db.Model):
     eligibleYear = db.Column(db.Integer, nullable=True)
     skillsRequired = db.Column(db.JSON, nullable=True)
 
+    # Stated as text ("0-1 years", "Fresher") rather than a number: postings
+    # phrase it as a range, and nothing here filters on it.
+    experienceRequired = db.Column(db.String(100), nullable=True)
+
     salary = db.Column(db.Float, nullable=True)
+    benefits = db.Column(db.Text, nullable=True)
     numOpenings = db.Column(db.Integer, nullable=True)
     jobType = db.Column(db.Enum(JobType), nullable=True)
 

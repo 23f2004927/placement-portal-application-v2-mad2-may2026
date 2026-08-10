@@ -18,7 +18,9 @@ const form = reactive({
   minCgpa: '',
   eligibleYear: '',
   skillsRequired: '',
+  experienceRequired: '',
   salary: '',
+  benefits: '',
   numOpenings: '',
   applicationDeadline: '',
 })
@@ -58,6 +60,8 @@ onMounted(async () => {
       minCgpa: drive.minCgpa ?? '',
       eligibleYear: drive.eligibleYear ?? '',
       salary: drive.salary ?? '',
+      benefits: drive.benefits ?? '',
+      experienceRequired: drive.experienceRequired ?? '',
       numOpenings: drive.numOpenings ?? '',
       skillsRequired: (drive.skillsRequired ?? []).join(', '),
       // datetime-local wants "YYYY-MM-DDTHH:mm"; the API sends full ISO.
@@ -143,9 +147,15 @@ function cancel() {
           </BFormGroup>
         </BCol>
 
-        <BCol md="12">
+        <BCol md="8">
           <BFormGroup label="Skills required" label-for="drive-skills" description="Comma separated">
             <BFormInput id="drive-skills" v-model="form.skillsRequired" placeholder="python, sql, react" />
+          </BFormGroup>
+        </BCol>
+
+        <BCol md="4">
+          <BFormGroup label="Experience" label-for="drive-experience" description="Stated, not filtered on">
+            <BFormInput id="drive-experience" v-model="form.experienceRequired" placeholder="0–1 years" />
           </BFormGroup>
         </BCol>
       </BRow>
@@ -169,6 +179,17 @@ function cancel() {
         <BCol md="4">
           <BFormGroup label="Application deadline" label-for="drive-deadline">
             <BFormInput id="drive-deadline" v-model="form.applicationDeadline" type="datetime-local" />
+          </BFormGroup>
+        </BCol>
+
+        <BCol md="12">
+          <BFormGroup label="Benefits" label-for="drive-benefits" description="Optional">
+            <BFormTextarea
+              id="drive-benefits"
+              v-model="form.benefits"
+              rows="2"
+              placeholder="Health cover, relocation support, learning budget…"
+            />
           </BFormGroup>
         </BCol>
       </BRow>

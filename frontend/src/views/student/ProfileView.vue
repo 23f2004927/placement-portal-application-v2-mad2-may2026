@@ -27,6 +27,10 @@ const form = reactive({
 })
 
 const links = reactive({ github: '', linkedin: '', portfolio: '' })
+// Comma-separated in the input, a JSON array on the model — same convention the
+// drive form uses for skillsRequired, so the two lists stay comparable.
+const skills = ref('')
+const experience = ref('')
 const fieldErrors = reactive({})
 const errorMsg = ref('')
 const savedMsg = ref('')
@@ -58,6 +62,8 @@ onMounted(async () => {
       cgpa: data.cgpa ?? '',
     })
     Object.assign(links, { github: '', linkedin: '', portfolio: '', ...(data.links ?? {}) })
+    skills.value = (data.skills ?? []).join(', ')
+    experience.value = data.experience ?? ''
     studentId.value = data.id
     resumeUploadedAt.value = data.resumeUploadedAt
   } catch (err) {
@@ -73,7 +79,12 @@ async function handleSubmit() {
   try {
     // rollNumber is read-only server-side, so it is not sent.
     const { rollNumber, ...editable } = form
-    await saveStudentProfile({ ...editable, links })
+    await saveStudentProfile({
+      ...editable,
+      links,
+      skills: skills.value.split(',').map((s) => s.trim()).filter(Boolean),
+      experience: experience.value,
+    })
     savedMsg.value = 'Profile updated.'
   } catch (err) {
     errorMsg.value = err.response?.data?.message ?? 'Could not save your profile.'
@@ -148,6 +159,30 @@ async function viewResume() {
       <p class="section-label">Details</p>
 
       <StudentFields :form="form" :errors="fieldErrors" />
+
+      <hr class="divider" />
+      <p class="section-label">Skills and experience</p>
+
+      <BRow class="g-2">
+        <BCol md="12">
+          <BFormGroup
+            label="Skills"
+            label-for="student-skills"
+            description="Comma separated — these are what drives list as required"
+          >
+            <BFormInput id="student-skills" v-model="skills" placeholder="python, sql, react" />
+          </BFormGroup>
+        </BCol>
+        <BCol md="12">
+          <BFormGroup
+            label="Experience"
+            label-for="student-experience"
+            description="Internships, projects or prior roles"
+          >
+            <BFormTextarea id="student-experience" v-model="experience" rows="3" />
+          </BFormGroup>
+        </BCol>
+      </BRow>
 
       <hr class="divider" />
       <p class="section-label">Portfolio</p>
