@@ -12,6 +12,7 @@ import {
   downloadOfferLetter,
 } from '@/services/applications'
 import { openResume } from '@/services/profile'
+import { useExport } from '@/composables/useExport'
 
 const columns = [
   { key: 'studentName', label: 'Candidate' , sortable: true },
@@ -28,6 +29,7 @@ const { rows, capabilities, total, page, perPage, loading, error, isFiltered, so
   useServerTable(fetchApplications)
 
 const { can, optionsFor } = useCapabilities(capabilities)
+const { exporting, message: exportMsg, run: exportCsv } = useExport()
 
 const editing = ref(null)
 const offering = ref(null)
@@ -103,6 +105,13 @@ async function resume(row) {
 
 <template>
   <div>
+    <div class="view-toolbar">
+      <span v-if="exportMsg" class="export-msg">{{ exportMsg }}</span>
+      <BButton variant="outline-primary" size="sm" :disabled="exporting" @click="exportCsv">
+        {{ exporting ? 'Working…' : 'Export CSV' }}
+      </BButton>
+    </div>
+
     <DataTable
       :columns="columns"
       :rows="rows"
@@ -241,6 +250,19 @@ async function resume(row) {
   font-weight: 600;
   white-space: normal;
   text-align: left;
+}
+
+.view-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.export-msg {
+  color: var(--text-muted);
+  font-size: 0.8125rem;
 }
 
 </style>

@@ -11,7 +11,7 @@ import {
   respondToOffer,
   downloadOfferLetter,
 } from '@/services/applications'
-import { startExport, exportState, downloadExport } from '@/services/exports'
+import { useExport } from '@/composables/useExport'
 
 const columns = [
   { key: 'driveTitle', label: 'Role' , sortable: true },
@@ -73,42 +73,7 @@ async function download(row) {
   }
 }
 
-/*
-  The export is a Celery job, so the POST only returns a task id. We poll until
-  the worker reports SUCCESS, then fetch the file. Requires a running worker —
-  without one this stays "Working…" forever, which is the honest behaviour.
-*/
-const exporting = ref(false)
-const exportMsg = ref('')
-
-async function exportCsv() {
-  exporting.value = true
-  exportMsg.value = 'Preparing your export…'
-  try {
-    const { taskId } = await startExport()
-
-    for (let attempt = 0; attempt < 20; attempt++) {
-      await new Promise((r) => setTimeout(r, 1000))
-      const { state } = await exportState(taskId)
-
-      if (state === 'SUCCESS') {
-        await downloadExport(taskId)
-        exportMsg.value = 'Export downloaded.'
-        return
-      }
-      if (state === 'FAILURE') {
-        exportMsg.value = 'The export failed.'
-        return
-      }
-    }
-    exportMsg.value = 'Still working — is the Celery worker running?'
-  } catch (err) {
-    exportMsg.value = err.response?.data?.message ?? 'Could not start the export.'
-  } finally {
-    exporting.value = false
-  }
-}
-
+const { exporting, message: exportMsg, run: exportCsv } = useExport()
 </script>
 
 <template>

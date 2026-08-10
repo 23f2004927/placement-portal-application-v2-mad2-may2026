@@ -9,7 +9,8 @@
 # .delay() call site — the name string is the only link between the two processes.
 
 
-from app.tasks.exports import student_applications_csv  # noqa: F401
+from app.tasks.exports import company_applications_csv, student_applications_csv  # noqa: F401
 from app.tasks.health import boom, ping  # noqa: F401
+from app.tasks.mail import send_email  # noqa: F401
 from app.tasks.reminders import daily_student_reminders  # noqa: F401
 from app.tasks.reports import monthly_placement_report  # noqa: F401
