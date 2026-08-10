@@ -22,6 +22,11 @@ export const filtersByRoute = {
 
   'student-drives': {
     search: 'Search role or company',
+    applied: [
+      { value: 'no', text: 'Not applied yet' },
+      { value: 'yes', text: 'Already applied' },
+    ],
+    maxCgpa: 'Max CGPA asked',
   },
   'student-applications': {
     search: 'Search role or company',
