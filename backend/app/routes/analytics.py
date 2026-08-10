@@ -13,6 +13,7 @@ from datetime import date
 
 from flask import Blueprint, jsonify
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 
 from app.extensions import cache, db
 from app.models import (
@@ -25,6 +26,7 @@ from app.models import (
     Student,
     User,
 )
+from app.policies import drive_ineligibility
 from app.utils.caching import cached_payload, scoped_key
 from app.utils.decorators import role_required
 
@@ -120,6 +122,100 @@ def _placements_by_branch(limit=8):
     return [{"branch": b, "count": n} for b, n in head]
 
 
+CGPA_BANDS = [(0, 6, "below 6"), (6, 7, "6 – 7"), (7, 8, "7 – 8"), (8, 9, "8 – 9"), (9, 11, "9 +")]
+
+
+def _applicant_branches(limit=8, *filters):
+    rows = (
+        db.session.query(Student.branch, func.count(Application.id))
+        .join(Application, Application.studentId == Student.id)
+        .filter(Application.status != ApplicationStatus.REVOKED, *filters)
+        .group_by(Student.branch)
+        .all()
+    )
+    tallied = sorted(
+        ((b.value.replace("_", " "), n) for b, n in rows if b), key=lambda r: -r[1]
+    )
+    head, tail = tallied[:limit], tallied[limit:]
+    if tail:
+        head.append(("other", sum(n for _, n in tail)))
+    return [{"branch": b, "count": n} for b, n in head]
+
+
+def _applicant_cgpa(*filters):
+    """Banded rather than raw: a scatter of individual CGPAs beside names would
+    be a different kind of disclosure, and bands are what a recruiter reads."""
+    values = [
+        row[0]
+        for row in db.session.query(Student.cgpa)
+        .join(Application, Application.studentId == Student.id)
+        .filter(Application.status != ApplicationStatus.REVOKED, *filters)
+        .all()
+        if row[0] is not None
+    ]
+    return [
+        {"band": label, "count": sum(1 for v in values if low <= v < high)}
+        for low, high, label in CGPA_BANDS
+    ]
+
+
+def _conversion(*filters):
+    """Only the rates this schema can honestly support.
+
+    An application that was interviewed and then rejected reads simply as
+    REJECTED — the furthest stage it reached is not recorded anywhere, so
+    shortlist and interview conversion CANNOT be computed without inventing
+    numbers. They are deliberately absent.
+
+    What is exact: OFFER, PLACED and DECLINED are each only reachable via an
+    offer, so "an offer was made" is recoverable, and PLACED vs DECLINED is a
+    true acceptance rate.
+    """
+    counts = dict(
+        db.session.query(Application.status, func.count(Application.id))
+        .filter(*filters)
+        .group_by(Application.status)
+        .all()
+    )
+
+    def n(status):
+        return counts.get(status, 0)
+
+    total = sum(v for k, v in counts.items() if k is not ApplicationStatus.REVOKED)
+    offered = n(ApplicationStatus.OFFER) + n(ApplicationStatus.PLACED) + n(ApplicationStatus.DECLINED)
+    answered = n(ApplicationStatus.PLACED) + n(ApplicationStatus.DECLINED)
+
+    def pct(part, whole):
+        return round(part / whole * 100) if whole else None
+
+    return {
+        "totalApplications": total,
+        "offerRate": pct(offered, total),
+        "acceptanceRate": pct(n(ApplicationStatus.PLACED), answered),
+        "placementRate": pct(n(ApplicationStatus.PLACED), total),
+    }
+
+
+def _below_criteria(company_id):
+    """How many applicants fall outside the drive's own stated criteria.
+
+    Computed in Python because the rule lives in policies.drive_ineligibility
+    and is shared with the serializers — duplicating it in SQL is exactly how
+    the advertised rule and the reported one drift apart.
+    """
+    applications = (
+        Application.query.options(
+            joinedload(Application.drive), joinedload(Application.student)
+        )
+        .join(Drive, Application.driveId == Drive.id)
+        .filter(Drive.companyId == company_id, Application.status != ApplicationStatus.REVOKED)
+        .all()
+    )
+
+    below = sum(1 for a in applications if drive_ineligibility(a.drive, a.student))
+    return {"total": len(applications), "below": below}
+
+
 def _top_skills(limit=8, *filters):
     """skillsRequired is a JSON array, so SQLite cannot group it. The list is
     small enough to tally in Python; revisit if drives ever reach thousands."""
@@ -157,6 +253,7 @@ def admin_analytics():
             "topSkills": _top_skills(),
             "offerOutcomes": _offer_outcomes(),
             "placementsByBranch": _placements_by_branch(),
+            "conversion": _conversion(),
         }
 
     # per_user=False: every admin sees the same portal-wide figures.
@@ -186,9 +283,16 @@ def company_analytics():
                 Application.statusUpdatedAt, mine, Application.status == ApplicationStatus.PLACED
             ),
             "funnel": _funnel(mine),
-            "topSkills": _top_skills(8, Drive.companyId == company.id),
             "offerOutcomes": _offer_outcomes(mine),
+            # Who is applying
+            "applicantBranches": _applicant_branches(8, mine),
+            "applicantCgpa": _applicant_cgpa(mine),
+            "belowCriteria": _below_criteria(company.id),
+            # Rates the schema can actually support
+            "conversion": _conversion(mine),
         }
+        # topSkills is deliberately NOT here: filtered to one company it only
+        # reflects the skills that company typed into its own postings.
 
     # per_user=True here: these figures are scoped to the caller's own company.
     return jsonify(cached_payload(scoped_key("companyAnalytics"), build, ttl=300)), 200

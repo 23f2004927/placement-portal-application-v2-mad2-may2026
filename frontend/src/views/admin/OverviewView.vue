@@ -21,6 +21,32 @@ onMounted(async () => {
   }
 })
 
+/*
+  Rates are single numbers, so tiles rather than charts. Shortlist and interview
+  conversion are absent on purpose: a rejected application does not record how
+  far it got, so those rates cannot be computed without inventing them.
+*/
+const conversion = computed(() => analytics.value?.conversion ?? {})
+const pct = (v) => (v === null || v === undefined ? '—' : `${v}%`)
+
+const rates = computed(() => [
+  {
+    label: 'Offer rate',
+    value: pct(conversion.value.offerRate),
+    hint: 'Applications that reached an offer',
+  },
+  {
+    label: 'Acceptance rate',
+    value: pct(conversion.value.acceptanceRate),
+    hint: 'Offers accepted vs declined',
+  },
+  {
+    label: 'Placement rate',
+    value: pct(conversion.value.placementRate),
+    hint: 'Applications ending in a placement',
+  },
+])
+
 const monthLabels = computed(() => analytics.value?.months ?? [])
 
 const trendSeries = computed(() => [
@@ -105,6 +131,11 @@ const queues = computed(() => [
       <StatCard v-for="c in cards" :key="c.label" v-bind="c" />
     </div>
 
+    <p class="section-label">Conversion</p>
+    <div class="stat-grid">
+      <StatCard v-for="r in rates" :key="r.label" v-bind="r" />
+    </div>
+
     <div class="chart-grid">
       <ChartCard
         class="span-2"
@@ -174,7 +205,7 @@ const queues = computed(() => [
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 16px;
-  margin-top: 16px;
+  margin-top: 24px;
 }
 
 /* The trend is the headline, so it gets the full width when there is room. */

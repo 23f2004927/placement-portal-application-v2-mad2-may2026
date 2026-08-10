@@ -79,6 +79,8 @@ def company_stats():
             or 0
         )
 
+    week_ahead = datetime.now() + timedelta(days=7)
+
     return jsonify(
         drives=_count(Drive, Drive.companyId == company.id),
         openDrives=_count(
@@ -88,6 +90,18 @@ def company_stats():
         shortlisted=applications_where(Application.status == ApplicationStatus.SHORTLISTED),
         offers=applications_where(Application.status == ApplicationStatus.OFFER),
         placed=applications_where(Application.status == ApplicationStatus.PLACED),
+        # --- queues: what needs attention now, same live-not-cached rule as admin
+        toReview=applications_where(Application.status == ApplicationStatus.APPLIED),
+        interviewsThisWeek=applications_where(
+            Application.status == ApplicationStatus.INTERVIEW,
+            Application.interviewScheduledAt.isnot(None),
+            Application.interviewScheduledAt >= datetime.now(),
+            Application.interviewScheduledAt <= week_ahead,
+        ),
+        offersAwaiting=applications_where(Application.status == ApplicationStatus.OFFER),
+        drivesPending=_count(
+            Drive, Drive.companyId == company.id, Drive.status == DriveStatus.PENDING
+        ),
     ), 200
 
 
