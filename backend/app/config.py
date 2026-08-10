@@ -53,6 +53,15 @@ class Config:
         },
     )
 
+    # Mail. With SMTP_HOST unset the send_email task writes the message to
+    # instance/outbox/ instead, so the scheduled jobs are demonstrable without
+    # a mail account. Setting the host is the only change needed to go live.
+    SMTP_HOST = os.environ.get("SMTP_HOST")
+    SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
+    SMTP_USER = os.environ.get("SMTP_USER")
+    SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")
+    MAIL_FROM = os.environ.get("MAIL_FROM", "placement-cell@institute.edu")
+
     CACHE_TYPE = "RedisCache"
     CACHE_REDIS_URL = f"{REDIS_URL}/2"
     CACHE_DEFAULT_TIMEOUT = 300

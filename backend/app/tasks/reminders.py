@@ -42,6 +42,7 @@ def daily_student_reminders():
             "Interview tomorrow",
             f"{application.drive.company.name} — {application.drive.title} "
             f"at {application.interviewScheduledAt.strftime('%H:%M')}.",
+            email=application.student.email,
         )
         sent += 1
 
@@ -69,6 +70,7 @@ def daily_student_reminders():
                     "Drive closing soon",
                     f"{drive.company.name} — {drive.title} closes on "
                     f"{drive.applicationDeadline.strftime('%d %b')}.",
+                    email=student.email,
                 )
                 sent += 1
 

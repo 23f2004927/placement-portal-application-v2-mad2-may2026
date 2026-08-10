@@ -1,18 +1,31 @@
-# 9 aug 26
+# 9 aug 26 · html + mail 10 aug 26
 # Christiano Fernandes
 # reports.py
 # monthly placement report for the admin
 #
 # Runs at 07:00 on the 1st (see beat_schedule in config.py) and summarises the
 # month that just ended. The Admin model exists to give this job a recipient.
+#
+# The report is rendered from a Jinja2 template rather than assembled as a
+# string: it is a document, it has a table, and the same template is what a
+# mail client receives. Jinja2 also escapes the company names for free.
 
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from celery import shared_task
+from flask import render_template
 
 from app.extensions import db
-from app.models import Application, ApplicationStatus, Role, User
+from app.models import (
+    Admin,
+    Application,
+    ApplicationStatus,
+    Company,
+    Drive,
+    Role,
+    User,
+)
 from app.tasks.notify import notify
 
 
@@ -25,41 +38,79 @@ def _previous_month(today):
 @shared_task(name="reports.monthly_placement_report")
 def monthly_placement_report():
     start, end = _previous_month(date.today())
+    first, last = start.isoformat(), end.isoformat()
 
-    def count(*filters):
+    def applications_where(date_column, *filters):
         return (
             db.session.query(db.func.count(Application.id))
             .filter(
-                db.func.date(Application.statusUpdatedAt) >= start.isoformat(),
-                db.func.date(Application.statusUpdatedAt) <= end.isoformat(),
+                db.func.date(date_column) >= first,
+                db.func.date(date_column) <= last,
                 *filters,
             )
             .scalar()
             or 0
         )
 
-    placed = count(Application.status == ApplicationStatus.PLACED)
-    offers = count(Application.status == ApplicationStatus.OFFER)
-    rejected = count(Application.status == ApplicationStatus.REJECTED)
+    # statusUpdatedAt holds only the LAST change, so these count applications
+    # that ENDED the month in each state — not every transition through it.
+    def ended_as(status):
+        return applications_where(Application.statusUpdatedAt, Application.status == status)
 
-    new_applications = (
-        db.session.query(db.func.count(Application.id))
+    stats = {
+        "newApplications": applications_where(Application.appliedAt),
+        "offers": ended_as(ApplicationStatus.OFFER) + ended_as(ApplicationStatus.PLACED),
+        "placed": ended_as(ApplicationStatus.PLACED),
+        "rejected": ended_as(ApplicationStatus.REJECTED),
+        "declined": ended_as(ApplicationStatus.DECLINED),
+        "drivesPosted": (
+            db.session.query(db.func.count(Drive.id))
+            .filter(db.func.date(Drive.createdAt) >= first, db.func.date(Drive.createdAt) <= last)
+            .scalar()
+            or 0
+        ),
+    }
+
+    companies = (
+        db.session.query(Company.name, db.func.count(Application.id))
+        .join(Drive, Drive.companyId == Company.id)
+        .join(Application, Application.driveId == Drive.id)
         .filter(
-            db.func.date(Application.appliedAt) >= start.isoformat(),
-            db.func.date(Application.appliedAt) <= end.isoformat(),
+            Application.status == ApplicationStatus.PLACED,
+            db.func.date(Application.statusUpdatedAt) >= first,
+            db.func.date(Application.statusUpdatedAt) <= last,
         )
-        .scalar()
-        or 0
+        .group_by(Company.name)
+        .order_by(db.func.count(Application.id).desc())
+        .all()
     )
 
-    body = (
-        f"{new_applications} new applications. "
-        f"{offers} offers made, {placed} students placed, {rejected} rejected."
+    month = start.strftime("%B %Y")
+    html = render_template(
+        "monthly_report.html",
+        month=month,
+        start=start,
+        end=end,
+        stats=stats,
+        companies=companies,
+        generatedAt=datetime.now(),
     )
 
-    admins = User.query.filter_by(role=Role.ADMIN).all()
-    for admin in admins:
-        notify(admin.id, f"Placement report — {start.strftime('%B %Y')}", body)
+    # The bell gets the summary line; the mailbox gets the rendered document.
+    summary = (
+        f"{stats['newApplications']} new applications, {stats['offers']} offers, "
+        f"{stats['placed']} placed."
+    )
+
+    admins = (
+        db.session.query(User.id, Admin.email)
+        .join(Admin, Admin.userId == User.id)
+        .filter(User.role == Role.ADMIN)
+        .all()
+    )
+
+    for user_id, email in admins:
+        notify(user_id, f"Placement report — {month}", summary, email=email, html=html)
 
     db.session.commit()
-    return {"month": start.strftime("%Y-%m"), "placed": placed, "admins": len(admins)}
+    return {"month": start.strftime("%Y-%m"), "placed": stats["placed"], "admins": len(admins)}

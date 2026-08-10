@@ -4,24 +4,30 @@
 # the one place a notification is created
 #
 # Every job funnels through notify() rather than writing Notification rows
-# itself. That keeps the delivery channel in ONE function: adding email later
-# means editing the marked block below and nothing else.
+# itself, so the delivery channels live in ONE function. A message goes to two
+# places: the bell in the app, and — when an address is given — email.
 
+
+from markupsafe import escape
 
 from app.extensions import db
 from app.models import Notification
+from app.tasks.mail import send_email
 
 
-def notify(user_id, title, body=None):
-    """Create an in-app notification. Caller commits."""
+def notify(user_id, title, body=None, email=None, html=None):
+    """Create an in-app notification, and email it if an address is given.
+
+    Caller commits. `html` overrides the default one-paragraph body, which is
+    how the monthly report sends a full rendered document through the same door.
+    """
     db.session.add(Notification(userId=user_id, title=title, body=body))
 
-    # --- PROVISION: email delivery -------------------------------------
-    # When Flask-Mail is added, the line below is the whole integration:
-    #
-    #     from app.tasks.mail import send_email
-    #     send_email.delay(user_email, title, body)
-    #
-    # It is a separate task on purpose — a mail server being down must never
-    # roll back the notification row, and the caller must not wait for SMTP.
-    # -------------------------------------------------------------------
+    if not email:
+        return
+
+    # Enqueued BEFORE the caller's commit, which is normally the mistake — a
+    # worker can start before the row exists. It is safe here because
+    # send_email takes the finished message as strings and never reads the
+    # database, so there is nothing for it to race against.
+    send_email.delay(email, title, html or f"<p>{escape(body or title)}</p>")

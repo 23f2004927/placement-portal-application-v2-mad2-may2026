@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Placement report — {{ month }}</title>
+  <style>
+    /* Inline and table-based on purpose: mail clients strip <link>, ignore most
+       layout CSS, and several drop <style> entirely — so the table below still
+       reads correctly with no styling at all. */
+    body { font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+           color: #1b1a17; max-width: 640px; margin: 32px auto; padding: 0 24px;
+           line-height: 1.6; }
+    .head { border-bottom: 2px solid #5551c6; padding-bottom: 12px; margin-bottom: 24px; }
+    h1 { font-size: 1.25rem; margin: 0; }
+    .period { color: #6d6a62; font-size: 0.8125rem; margin: 4px 0 0; }
+    table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #d7d3ca; }
+    th { color: #6d6a62; font-size: 0.75rem; letter-spacing: 0.06em;
+         text-transform: uppercase; font-weight: 700; }
+    td.n { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+    .section { margin-top: 28px; font-size: 0.6875rem; font-weight: 700;
+               letter-spacing: 0.08em; text-transform: uppercase; color: #6d6a62; }
+    .footer { margin-top: 32px; color: #6d6a62; font-size: 0.75rem;
+              border-top: 1px solid #d7d3ca; padding-top: 12px; }
+  </style>
+</head>
+<body>
+  <div class="head">
+    <h1>Monthly placement report</h1>
+    <p class="period">{{ month }} &middot; {{ start.strftime('%d %b') }} to {{ end.strftime('%d %b %Y') }}</p>
+  </div>
+
+  <p>Placement activity for the month just ended.</p>
+
+  <p class="section">Activity</p>
+  <table>
+    <tr><th>New applications</th><td class="n">{{ stats.newApplications }}</td></tr>
+    <tr><th>Drives posted</th><td class="n">{{ stats.drivesPosted }}</td></tr>
+    <tr><th>Offers made</th><td class="n">{{ stats.offers }}</td></tr>
+    <tr><th>Students placed</th><td class="n">{{ stats.placed }}</td></tr>
+    <tr><th>Applications rejected</th><td class="n">{{ stats.rejected }}</td></tr>
+    <tr><th>Offers declined</th><td class="n">{{ stats.declined }}</td></tr>
+  </table>
+
+  {% if stats.offers %}
+    <p>
+      Acceptance rate for the month:
+      <strong>{{ '%.0f'|format(stats.placed / stats.offers * 100) }}%</strong>
+      ({{ stats.placed }} of {{ stats.offers }} offers accepted).
+    </p>
+  {% else %}
+    <p>No offers were made this month, so no acceptance rate is reported.</p>
+  {% endif %}
+
+  <p class="section">Recruiters active this month</p>
+  {% if companies %}
+    <table>
+      <tr><th>Company</th><th style="text-align:right">Placed</th></tr>
+      {% for name, count in companies %}
+        <tr><td>{{ name }}</td><td class="n">{{ count }}</td></tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p>No company placed a candidate this month.</p>
+  {% endif %}
+
+  <div class="footer">
+    Generated automatically by the Placement Portal on
+    {{ generatedAt.strftime('%d %B %Y at %H:%M') }}. Counts are taken from
+    application status changes dated within the reporting month.
+  </div>
+</body>
+</html>
