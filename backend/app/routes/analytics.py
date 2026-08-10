@@ -25,6 +25,7 @@ from app.models import (
     Student,
     User,
 )
+from app.utils.caching import cached_payload, scoped_key
 from app.utils.decorators import role_required
 
 analytics_bp = Blueprint("analytics", __name__, url_prefix="/api")
@@ -81,6 +82,44 @@ def _funnel(*filters):
     ]
 
 
+def _offer_outcomes(*filters):
+    """What happened to offers once they were made.
+
+    Only answerable since DECLINED existed: before that a student turning an
+    offer down was indistinguishable from the company rejecting them.
+    """
+    counts = dict(
+        db.session.query(Application.status, func.count(Application.id))
+        .filter(*filters)
+        .group_by(Application.status)
+        .all()
+    )
+    return [
+        {"outcome": "accepted", "count": counts.get(ApplicationStatus.PLACED, 0)},
+        {"outcome": "declined", "count": counts.get(ApplicationStatus.DECLINED, 0)},
+        {"outcome": "awaiting", "count": counts.get(ApplicationStatus.OFFER, 0)},
+    ]
+
+
+def _placements_by_branch(limit=8):
+    """18 branches will not fit on an axis, so the tail folds into 'other'
+    rather than being generated a colour it cannot be told apart by."""
+    rows = (
+        db.session.query(Student.branch, func.count(Application.id))
+        .join(Application, Application.studentId == Student.id)
+        .filter(Application.status == ApplicationStatus.PLACED)
+        .group_by(Student.branch)
+        .all()
+    )
+    tallied = sorted(
+        ((b.value.replace("_", " "), n) for b, n in rows if b), key=lambda r: -r[1]
+    )
+    head, tail = tallied[:limit], tallied[limit:]
+    if tail:
+        head.append(("other", sum(n for _, n in tail)))
+    return [{"branch": b, "count": n} for b, n in head]
+
+
 def _top_skills(limit=8, *filters):
     """skillsRequired is a JSON array, so SQLite cannot group it. The list is
     small enough to tally in Python; revisit if drives ever reach thousands."""
@@ -96,15 +135,32 @@ def _top_skills(limit=8, *filters):
 @analytics_bp.route("/admin/analytics", methods=["GET"])
 @role_required("admin")
 def admin_analytics():
-    return jsonify(
-        months=_recent_months(),
-        applications=_monthly(Application.appliedAt),
-        placements=_monthly(
-            Application.statusUpdatedAt, Application.status == ApplicationStatus.PLACED
-        ),
-        funnel=_funnel(),
-        topSkills=_top_skills(),
-    ), 200
+    """Cached for 5 minutes — unlike /api/admin/stats, which stays live.
+
+    Nobody needs second-accurate aggregates, and no invalidation is wired on
+    purpose: the TTL is the whole policy. Trends move slowly; queues do not,
+    which is why the two live in different endpoints.
+    """
+
+    def build():
+        return {
+            "months": _recent_months(),
+            "applications": _monthly(Application.appliedAt),
+            # NOTE: approximate. statusUpdatedAt holds only the LAST change, so
+            # editing a placed row later moves it into the wrong month. Exact
+            # history needs an event log.
+            "placements": _monthly(
+                Application.statusUpdatedAt,
+                Application.status == ApplicationStatus.PLACED,
+            ),
+            "funnel": _funnel(),
+            "topSkills": _top_skills(),
+            "offerOutcomes": _offer_outcomes(),
+            "placementsByBranch": _placements_by_branch(),
+        }
+
+    # per_user=False: every admin sees the same portal-wide figures.
+    return jsonify(cached_payload(scoped_key("adminAnalytics", per_user=False), build, ttl=300)), 200
 
 
 @analytics_bp.route("/company/analytics", methods=["GET"])
@@ -122,15 +178,20 @@ def company_analytics():
         db.session.query(Drive.id).filter(Drive.companyId == company.id)
     )
 
-    return jsonify(
-        months=_recent_months(),
-        applications=_monthly(Application.appliedAt, mine),
-        placements=_monthly(
-            Application.statusUpdatedAt, mine, Application.status == ApplicationStatus.PLACED
-        ),
-        funnel=_funnel(mine),
-        topSkills=_top_skills(8, Drive.companyId == company.id),
-    ), 200
+    def build():
+        return {
+            "months": _recent_months(),
+            "applications": _monthly(Application.appliedAt, mine),
+            "placements": _monthly(
+                Application.statusUpdatedAt, mine, Application.status == ApplicationStatus.PLACED
+            ),
+            "funnel": _funnel(mine),
+            "topSkills": _top_skills(8, Drive.companyId == company.id),
+            "offerOutcomes": _offer_outcomes(mine),
+        }
+
+    # per_user=True here: these figures are scoped to the caller's own company.
+    return jsonify(cached_payload(scoped_key("companyAnalytics"), build, ttl=300)), 200
 
 
 @analytics_bp.route("/public/stats", methods=["GET"])

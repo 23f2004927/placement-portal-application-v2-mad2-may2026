@@ -37,6 +37,11 @@ const funnelLabels = computed(() => (analytics.value?.funnel ?? []).map((f) => f
 const funnelSeries = computed(() => [
   { label: 'Candidates', data: (analytics.value?.funnel ?? []).map((f) => f.count) },
 ])
+
+const outcomeLabels = computed(() => (analytics.value?.offerOutcomes ?? []).map((o) => o.outcome))
+const outcomeSeries = computed(() => [
+  { label: 'Offers', data: (analytics.value?.offerOutcomes ?? []).map((o) => o.count) },
+])
 </script>
 
 <template>
@@ -62,6 +67,14 @@ const funnelSeries = computed(() => [
         horizontal
         :labels="funnelLabels"
         :series="funnelSeries"
+      />
+
+      <ChartCard
+        title="Offer outcomes"
+        subtitle="How candidates responded to your offers"
+        horizontal
+        :labels="outcomeLabels"
+        :series="outcomeSeries"
       />
     </div>
   </div>

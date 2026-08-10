@@ -9,6 +9,8 @@
 # cross the wire to be discarded.
 
 
+from datetime import datetime, timedelta
+
 from flask import Blueprint, jsonify
 from sqlalchemy import func
 
@@ -92,14 +94,32 @@ def company_stats():
 @stats_bp.route("/admin/stats", methods=["GET"])
 @role_required("admin")
 def admin_stats():
+    """Deliberately NOT cached, unlike /api/admin/analytics.
+
+    The queue counts below are work an admin is about to act on: approve a
+    company and the number must drop on the next load. A cached queue is worse
+    than no queue, because it invites them to click something that has already
+    moved.
+    """
+    week_ahead = datetime.now() + timedelta(days=7)
+
     return jsonify(
         students=_count(Student),
         companies=_count(Company),
         drives=_count(Drive),
         applications=_count(Application, Application.status != ApplicationStatus.REVOKED),
         placed=_count(Application, Application.status == ApplicationStatus.PLACED),
-        pendingApprovals=(
-            _count(User, User.accountStatus == AccountStatus.PENDING)
-            + _count(Drive, Drive.status == DriveStatus.PENDING)
+        # --- queues: what needs attention now -------------------------------
+        # Split from the old combined pendingApprovals so each tile can link to
+        # the list that resolves it.
+        pendingCompanies=_count(User, User.accountStatus == AccountStatus.PENDING),
+        pendingDrives=_count(Drive, Drive.status == DriveStatus.PENDING),
+        offersAwaiting=_count(Application, Application.status == ApplicationStatus.OFFER),
+        interviewsThisWeek=_count(
+            Application,
+            Application.status == ApplicationStatus.INTERVIEW,
+            Application.interviewScheduledAt.isnot(None),
+            Application.interviewScheduledAt >= datetime.now(),
+            Application.interviewScheduledAt <= week_ahead,
         ),
     ), 200
