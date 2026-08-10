@@ -1,9 +1,9 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref } from 'vue'
 import DataTable from '@/components/common/DataTable.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import ModalDialog from '@/components/common/ModalDialog.vue'
-import { useTableFilters } from '@/composables/useTableFilters'
+import { useServerTable } from '@/composables/useServerTable'
 import { useCapabilities } from '@/composables/useCapabilities'
 import {
   fetchApplications,
@@ -14,39 +14,22 @@ import {
 import { startExport, exportState, downloadExport } from '@/services/exports'
 
 const columns = [
-  { key: 'driveTitle', label: 'Role' },
-  { key: 'companyName', label: 'Company' },
-  { key: 'appliedAt', label: 'Applied', width: '130px' },
-  { key: 'interviewScheduledAt', label: 'Interview', width: '150px' },
-  { key: 'status', label: 'Status', width: '130px' },
+  { key: 'driveTitle', label: 'Role' , sortable: true },
+  { key: 'companyName', label: 'Company' , sortable: true },
+  { key: 'appliedAt', label: 'Applied', width: '130px' , sortable: true , type: 'date' },
+  { key: 'interviewScheduledAt', label: 'Interview', width: '150px' , sortable: true , type: 'datetime' },
+  { key: 'status', label: 'Status', width: '130px' , sortable: true },
 ]
 
-const rows = ref([])
-const loading = ref(false)
-const error = ref('')
-const capabilities = ref({})
+const { rows, capabilities, total, page, perPage, loading, error, isFiltered, sortKey, sortDir, load, setPage, setSort } =
+  useServerTable(fetchApplications)
 
-const { apply, isFiltered } = useTableFilters({ searchKeys: ['driveTitle', 'companyName'] })
-const visibleRows = computed(() => apply(rows.value))
 const { can } = useCapabilities(capabilities)
 
 const withdrawing = ref(null)
 const viewing = ref(null)
 const busy = ref(false)
 
-async function load() {
-  loading.value = true
-  error.value = ''
-  try {
-    const data = await fetchApplications()
-    rows.value = data.items
-    capabilities.value = data.capabilities
-  } catch (err) {
-    error.value = err.response?.data?.message ?? 'Could not load your applications.'
-  } finally {
-    loading.value = false
-  }
-}
 
 async function confirmWithdraw() {
   busy.value = true
@@ -126,7 +109,6 @@ async function exportCsv() {
   }
 }
 
-onMounted(load)
 </script>
 
 <template>
@@ -140,10 +122,17 @@ onMounted(load)
 
     <DataTable
       :columns="columns"
-      :rows="visibleRows"
+      :rows="rows"
       :loading="loading"
       :error="error"
+      :total="total"
+      :page="page"
+      :per-page="perPage"
       :empty-text="isFiltered ? 'No applications match the current filters.' : 'You haven\'t applied to anything yet.'"
+      :sort="sortKey"
+      :dir="sortDir"
+      @update:page="setPage"
+      @update:sort="setSort"
     >
       <template #cell-status="{ value }">
         <StatusBadge :status="value" />

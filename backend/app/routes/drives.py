@@ -11,7 +11,15 @@ from flask_jwt_extended import jwt_required
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.extensions import db
-from app.models import Application, ApplicationStatus, Branch, Drive, DriveStatus, JobType
+from app.models import (
+    Application,
+    ApplicationStatus,
+    Branch,
+    Company,
+    Drive,
+    DriveStatus,
+    JobType,
+)
 from app.policies import (
     STUDENT_VISIBLE_DRIVES,
     can_close_drive,
@@ -22,6 +30,7 @@ from app.policies import (
 from app.serializers import serialize_drive
 from app.utils.caching import cached_payload, invalidate, scoped_key
 from app.utils.decorators import role_required
+from app.utils.pagination import enum_filter, paginate, search, sort
 from app.utils.identity import current_company, current_role, current_student
 
 drives_bp = Blueprint("drives", __name__, url_prefix="/api")
@@ -129,7 +138,7 @@ def list_drives():
 
 
 def _build_drives_payload(role, company, student):
-    query = Drive.query.options(joinedload(Drive.company))
+    query = Drive.query.options(joinedload(Drive.company)).join(Drive.company)
     applied_ids = None
 
     if role == "company":
@@ -159,14 +168,50 @@ def _build_drives_payload(role, company, student):
             .all()
         }
 
+        # ?applied=yes|no — "have I already put my name down for this?"
+        applied = (request.args.get("applied") or "").strip()
+        if applied == "yes":
+            query = query.filter(Drive.id.in_(applied_ids or [-1]))
+        elif applied == "no":
+            query = query.filter(Drive.id.notin_(applied_ids or [-1]))
+
+        # ?maxCgpa= — drives asking for at most this. A drive with no minimum
+        # always qualifies, which is why NULL is kept rather than compared.
+        raw_cgpa = (request.args.get("maxCgpa") or "").strip()
+        if raw_cgpa:
+            try:
+                query = query.filter(
+                    (Drive.minCgpa.is_(None)) | (Drive.minCgpa <= float(raw_cgpa))
+                )
+            except ValueError:
+                pass
+
     elif role == "admin":
         query = query.options(selectinload(Drive.applications))
 
-    drives = query.order_by(Drive.createdAt.desc()).all()
+    query = search(query, [Drive.title, Company.name])
+    query = enum_filter(query, Drive.status, DriveStatus)
+    query = sort(
+        query,
+        {
+            "title": Drive.title,
+            "companyName": Company.name,
+            "jobType": Drive.jobType,
+            "minCgpa": Drive.minCgpa,
+            "salary": Drive.salary,
+            "numOpenings": Drive.numOpenings,
+            "applicationDeadline": Drive.applicationDeadline,
+            "status": Drive.status,
+        },
+        default=(Drive.createdAt.desc(), Drive.id.desc()),
+    )
+
+    drives, meta = paginate(query)
 
     return {
         "items": [serialize_drive(d, role, applied_ids, student) for d in drives],
         "capabilities": drive_capabilities_for(role),
+        **meta,
     }
 
 

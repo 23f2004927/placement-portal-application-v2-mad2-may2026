@@ -16,6 +16,7 @@ from app.policies import account_capabilities_for, can_blacklist
 from app.serializers import serialize_student
 from app.utils.caching import cached_payload, invalidate, scoped_key
 from app.utils.decorators import role_required
+from app.utils.pagination import paginate, search, sort
 
 students_bp = Blueprint("students", __name__, url_prefix="/api")
 
@@ -24,12 +25,28 @@ students_bp = Blueprint("students", __name__, url_prefix="/api")
 @role_required("admin")
 def list_students():
     def build():
-        students = (
-            Student.query.options(joinedload(Student.user)).order_by(Student.name).all()
+        query = Student.query.options(joinedload(Student.user))
+        query = search(query, [Student.name, Student.rollNumber, Student.email, Student.phoneNumber])
+        # Student.id is the tiebreaker: two students can share a name, and
+        # without it those rows can swap between pages.
+        query = sort(
+            query,
+            {
+                "name": Student.name,
+                "rollNumber": Student.rollNumber,
+                "branch": Student.branch,
+                "yearStudy": Student.yearStudy,
+                "cgpa": Student.cgpa,
+                "email": Student.email,
+            },
+            default=(Student.name, Student.id),
         )
+
+        students, meta = paginate(query)
         return {
             "items": [serialize_student(s, "admin") for s in students],
             "capabilities": account_capabilities_for("admin", review=False),
+            **meta,
         }
 
     return jsonify(cached_payload(scoped_key("students", per_user=False), build)), 200

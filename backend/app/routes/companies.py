@@ -15,11 +15,12 @@ from flask import Blueprint, jsonify, request
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import AccountStatus, Company
+from app.models import AccountStatus, Company, User
 from app.policies import account_capabilities_for, can_blacklist, can_moderate_account
 from app.serializers import serialize_company
 from app.utils.caching import cached_payload, invalidate, scoped_key
 from app.utils.decorators import role_required
+from app.utils.pagination import enum_filter, paginate, search, sort
 
 
 companies_bp = Blueprint("companies", __name__, url_prefix="/api")
@@ -34,14 +35,30 @@ def list_companies():
     # per_user=False: every admin sees exactly the same register, so one shared
     # key is correct here — unlike /api/drives, nothing is scoped to the caller.
     def build():
-        companies = (
-            Company.query.options(joinedload(Company.user))
-            .order_by(Company.name)
-            .all()
+        query = Company.query.options(joinedload(Company.user)).join(
+            User, Company.userId == User.id
         )
+        query = search(
+            query, [Company.name, Company.industry, Company.location, Company.hrContactEmail]
+        )
+        query = enum_filter(query, User.accountStatus, AccountStatus)
+        query = sort(
+            query,
+            {
+                "name": Company.name,
+                "industry": Company.industry,
+                "location": Company.location,
+                "hrContactEmail": Company.hrContactEmail,
+                "accountStatus": User.accountStatus,
+            },
+            default=(Company.name, Company.id),
+        )
+
+        companies, meta = paginate(query)
         return {
             "items": [serialize_company(c, "admin") for c in companies],
             "capabilities": account_capabilities_for("admin"),
+            **meta,
         }
 
     return jsonify(cached_payload(scoped_key("companies", per_user=False), build)), 200

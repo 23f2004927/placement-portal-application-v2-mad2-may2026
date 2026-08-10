@@ -1,9 +1,9 @@
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import DataTable from '@/components/common/DataTable.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import ModalDialog from '@/components/common/ModalDialog.vue'
-import { useTableFilters } from '@/composables/useTableFilters'
+import { useServerTable } from '@/composables/useServerTable'
 import { useCapabilities } from '@/composables/useCapabilities'
 import {
   fetchApplications,
@@ -13,25 +13,19 @@ import {
 } from '@/services/applications'
 
 const columns = [
-  { key: 'studentName', label: 'Candidate' },
-  { key: 'rollNumber', label: 'Roll no.', width: '130px' },
+  { key: 'studentName', label: 'Candidate' , sortable: true },
+  { key: 'rollNumber', label: 'Roll no.', width: '130px' , sortable: true },
   { key: 'branch', label: 'Branch', width: '150px' },
-  { key: 'cgpa', label: 'CGPA', width: '80px' },
-  { key: 'driveTitle', label: 'Drive' },
+  { key: 'cgpa', label: 'CGPA', width: '80px' , sortable: true },
+  { key: 'driveTitle', label: 'Drive' , sortable: true },
   { key: 'belowCriteria', label: 'Match', width: '150px' },
-  { key: 'interviewScheduledAt', label: 'Interview', width: '150px' },
-  { key: 'status', label: 'Status', width: '130px' },
+  { key: 'interviewScheduledAt', label: 'Interview', width: '150px' , sortable: true , type: 'datetime' },
+  { key: 'status', label: 'Status', width: '130px' , sortable: true },
 ]
 
-const rows = ref([])
-const loading = ref(false)
-const error = ref('')
-const capabilities = ref({})
+const { rows, capabilities, total, page, perPage, loading, error, isFiltered, sortKey, sortDir, load, setPage, setSort } =
+  useServerTable(fetchApplications)
 
-const { apply, isFiltered } = useTableFilters({
-  searchKeys: ['studentName', 'rollNumber', 'driveTitle', 'branch'],
-})
-const visibleRows = computed(() => apply(rows.value))
 const { can, optionsFor } = useCapabilities(capabilities)
 
 const editing = ref(null)
@@ -40,19 +34,6 @@ const busy = ref(false)
 const draft = reactive({ status: '', feedback: '', interviewScheduledAt: '' })
 const joiningDate = ref('')
 
-async function load() {
-  loading.value = true
-  error.value = ''
-  try {
-    const data = await fetchApplications()
-    rows.value = data.items
-    capabilities.value = data.capabilities
-  } catch (err) {
-    error.value = err.response?.data?.message ?? 'Could not load applicants.'
-  } finally {
-    loading.value = false
-  }
-}
 
 function openStatus(row) {
   editing.value = row
@@ -107,17 +88,23 @@ async function download(row) {
   }
 }
 
-onMounted(load)
 </script>
 
 <template>
   <div>
     <DataTable
       :columns="columns"
-      :rows="visibleRows"
+      :rows="rows"
       :loading="loading"
       :error="error"
+      :total="total"
+      :page="page"
+      :per-page="perPage"
       :empty-text="isFiltered ? 'No applicants match the current filters.' : 'No applications received yet.'"
+      :sort="sortKey"
+      :dir="sortDir"
+      @update:page="setPage"
+      @update:sort="setSort"
     >
       <template #cell-status="{ value }">
         <StatusBadge :status="value" />

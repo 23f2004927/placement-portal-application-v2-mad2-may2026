@@ -1,9 +1,9 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref } from 'vue'
 import DataTable from '@/components/common/DataTable.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import ModalDialog from '@/components/common/ModalDialog.vue'
-import { useTableFilters } from '@/composables/useTableFilters'
+import { useServerTable } from '@/composables/useServerTable'
 import { useCapabilities } from '@/composables/useCapabilities'
 import { fetchDrives, updateDrive } from '@/services/drives'
 import { useAuth } from '@/stores/auth'
@@ -11,39 +11,22 @@ import { useAuth } from '@/stores/auth'
 const auth = useAuth()
 
 const columns = [
-  { key: 'title', label: 'Title' },
-  { key: 'jobType', label: 'Type', width: '140px' },
-  { key: 'numOpenings', label: 'Openings', width: '110px' },
+  { key: 'title', label: 'Title' , sortable: true },
+  { key: 'jobType', label: 'Type', width: '140px' , sortable: true },
+  { key: 'numOpenings', label: 'Openings', width: '110px' , sortable: true },
   { key: 'applicationCount', label: 'Applicants', width: '110px' },
-  { key: 'applicationDeadline', label: 'Deadline', width: '150px' },
-  { key: 'status', label: 'Status', width: '130px' },
+  { key: 'applicationDeadline', label: 'Deadline', width: '150px' , sortable: true , type: 'date' },
+  { key: 'status', label: 'Status', width: '130px' , sortable: true },
 ]
 
-const rows = ref([])
-const loading = ref(false)
-const error = ref('')
-const capabilities = ref({})
+const { rows, capabilities, total, page, perPage, loading, error, isFiltered, sortKey, sortDir, load, setPage, setSort } =
+  useServerTable(fetchDrives)
 
-const { apply, isFiltered } = useTableFilters({ searchKeys: ['title', 'jobType'] })
-const visibleRows = computed(() => apply(rows.value))
 const { can } = useCapabilities(capabilities)
 
 const closing = ref(null)
 const busy = ref(false)
 
-async function load() {
-  loading.value = true
-  error.value = ''
-  try {
-    const data = await fetchDrives()
-    rows.value = data.items
-    capabilities.value = data.capabilities
-  } catch (err) {
-    error.value = err.response?.data?.message ?? 'Could not load your drives.'
-  } finally {
-    loading.value = false
-  }
-}
 
 async function confirmClose() {
   busy.value = true
@@ -59,7 +42,6 @@ async function confirmClose() {
   }
 }
 
-onMounted(load)
 </script>
 
 <template>
@@ -84,10 +66,17 @@ onMounted(load)
 
     <DataTable
       :columns="columns"
-      :rows="visibleRows"
+      :rows="rows"
       :loading="loading"
       :error="error"
+      :total="total"
+      :page="page"
+      :per-page="perPage"
       :empty-text="isFiltered ? 'No drives match the current filters.' : 'You haven\'t posted a drive yet.'"
+      :sort="sortKey"
+      :dir="sortDir"
+      @update:page="setPage"
+      @update:sort="setSort"
     >
       <template #cell-status="{ value }">
         <StatusBadge :status="value" />

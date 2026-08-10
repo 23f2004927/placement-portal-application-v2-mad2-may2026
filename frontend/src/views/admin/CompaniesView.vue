@@ -1,49 +1,29 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref } from 'vue'
 import DataTable from '@/components/common/DataTable.vue'
 import ModalDialog from '@/components/common/ModalDialog.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
-import { useTableFilters } from '@/composables/useTableFilters'
+import { useServerTable } from '@/composables/useServerTable'
 import { useCapabilities } from '@/composables/useCapabilities'
 import { fetchCompanies, moderateCompany } from '@/services/admin'
 
 const columns = [
-  { key: 'name', label: 'Company' },
-  { key: 'industry', label: 'Industry', width: '160px' },
-  { key: 'location', label: 'Location', width: '150px' },
-  { key: 'hrContactEmail', label: 'HR contact' },
-  { key: 'accountStatus', label: 'Status', width: '130px' },
+  { key: 'name', label: 'Company' , sortable: true },
+  { key: 'industry', label: 'Industry', width: '160px' , sortable: true },
+  { key: 'location', label: 'Location', width: '150px' , sortable: true },
+  { key: 'hrContactEmail', label: 'HR contact' , sortable: true },
+  { key: 'accountStatus', label: 'Status', width: '130px' , sortable: true },
   { key: 'blackListed', label: 'Access', width: '120px' },
 ]
 
-const rows = ref([])
-const loading = ref(false)
-const error = ref('')
-const capabilities = ref({})
+const { rows, capabilities, total, page, perPage, loading, error, isFiltered, sortKey, sortDir, load, setPage, setSort } =
+  useServerTable(fetchCompanies)
 
-const { apply, isFiltered } = useTableFilters({
-  searchKeys: ['name', 'industry', 'location', 'hrContactEmail'],
-  statusKey: 'accountStatus',
-})
-const visibleRows = computed(() => apply(rows.value))
 const { can } = useCapabilities(capabilities, 'accountStatus')
 
 const pending = ref(null)
 const busy = ref(false)
 
-async function load() {
-  loading.value = true
-  error.value = ''
-  try {
-    const data = await fetchCompanies()
-    rows.value = data.items
-    capabilities.value = data.capabilities
-  } catch (err) {
-    error.value = err.response?.data?.message ?? 'Could not load companies.'
-  } finally {
-    loading.value = false
-  }
-}
 
 async function confirm() {
   busy.value = true
@@ -63,17 +43,23 @@ function ask(row, payload, title, confirmText, variant, body) {
   pending.value = { row, payload, title, confirmText, variant, body }
 }
 
-onMounted(load)
 </script>
 
 <template>
   <div>
     <DataTable
       :columns="columns"
-      :rows="visibleRows"
+      :rows="rows"
       :loading="loading"
       :error="error"
+      :total="total"
+      :page="page"
+      :per-page="perPage"
       :empty-text="isFiltered ? 'No companies match the current filters.' : 'No companies registered yet.'"
+      :sort="sortKey"
+      :dir="sortDir"
+      @update:page="setPage"
+      @update:sort="setSort"
     >
       <template #cell-accountStatus="{ value }">
         <StatusBadge :status="value" />

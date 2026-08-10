@@ -1,30 +1,24 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref } from 'vue'
 import DataTable from '@/components/common/DataTable.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import ModalDialog from '@/components/common/ModalDialog.vue'
-import { useTableFilters } from '@/composables/useTableFilters'
+import { useServerTable } from '@/composables/useServerTable'
 import { useCapabilities } from '@/composables/useCapabilities'
 import { fetchApplications, revokeApplication } from '@/services/applications'
 
 const columns = [
-  { key: 'studentName', label: 'Candidate' },
-  { key: 'rollNumber', label: 'Roll no.', width: '130px' },
-  { key: 'driveTitle', label: 'Role' },
-  { key: 'companyName', label: 'Company' },
-  { key: 'appliedAt', label: 'Applied', width: '130px' },
-  { key: 'status', label: 'Status', width: '130px' },
+  { key: 'studentName', label: 'Candidate' , sortable: true },
+  { key: 'rollNumber', label: 'Roll no.', width: '130px' , sortable: true },
+  { key: 'driveTitle', label: 'Role' , sortable: true },
+  { key: 'companyName', label: 'Company' , sortable: true },
+  { key: 'appliedAt', label: 'Applied', width: '130px' , sortable: true , type: 'date' },
+  { key: 'status', label: 'Status', width: '130px' , sortable: true },
 ]
 
-const rows = ref([])
-const loading = ref(false)
-const error = ref('')
-const capabilities = ref({})
+const { rows, capabilities, total, page, perPage, loading, error, isFiltered, sortKey, sortDir, load, setPage, setSort } =
+  useServerTable(fetchApplications)
 
-const { apply, isFiltered } = useTableFilters({
-  searchKeys: ['studentName', 'rollNumber', 'driveTitle', 'companyName'],
-})
-const visibleRows = computed(() => apply(rows.value))
 const { can } = useCapabilities(capabilities)
 
 const revoking = ref(null)
@@ -32,19 +26,6 @@ const busy = ref(false)
 
 // Same GET the other two roles call — the backend scopes by claim, so admin
 // gets every row unfiltered, including withdrawn ones.
-async function load() {
-  loading.value = true
-  error.value = ''
-  try {
-    const data = await fetchApplications()
-    rows.value = data.items
-    capabilities.value = data.capabilities
-  } catch (err) {
-    error.value = err.response?.data?.message ?? 'Could not load applications.'
-  } finally {
-    loading.value = false
-  }
-}
 
 async function confirmRevoke() {
   busy.value = true
@@ -60,17 +41,23 @@ async function confirmRevoke() {
   }
 }
 
-onMounted(load)
 </script>
 
 <template>
   <div>
     <DataTable
       :columns="columns"
-      :rows="visibleRows"
+      :rows="rows"
       :loading="loading"
       :error="error"
+      :total="total"
+      :page="page"
+      :per-page="perPage"
       :empty-text="isFiltered ? 'No applications match the current filters.' : 'No applications yet.'"
+      :sort="sortKey"
+      :dir="sortDir"
+      @update:page="setPage"
+      @update:sort="setSort"
     >
       <template #cell-status="{ value }">
         <StatusBadge :status="value" />

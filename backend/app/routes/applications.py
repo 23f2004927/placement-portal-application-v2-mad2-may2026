@@ -11,7 +11,15 @@ from flask_jwt_extended import jwt_required
 from sqlalchemy.orm import joinedload
 
 from app.extensions import IntegrityError, db
-from app.models import Application, ApplicationStatus, Drive, DriveStatus, OfferLetter
+from app.models import (
+    Application,
+    ApplicationStatus,
+    Company,
+    Drive,
+    DriveStatus,
+    OfferLetter,
+    Student,
+)
 from app.policies import (
     HIDDEN_FROM_COMPANY,
     can_issue_offer_letter,
@@ -23,6 +31,7 @@ from app.policies import (
 from app.serializers import serialize_application
 from app.utils.caching import invalidate
 from app.utils.decorators import role_required
+from app.utils.pagination import enum_filter, paginate, search, sort
 from app.utils.identity import current_company, current_role, current_student
 
 # url_prefix stops at /api so every rule can carry a leading slash. A blueprint
@@ -69,10 +78,18 @@ def list_applications():
     role must not fall through to an unfiltered query."""
     role = current_role()
 
-    query = Application.query.options(
-        joinedload(Application.drive).joinedload(Drive.company),
-        joinedload(Application.student),
-        joinedload(Application.offerLetter),
+    # Joined once, up front: the company branch needs Drive for ownership and
+    # the search needs all three. joinedload uses its own anonymous aliases, so
+    # these joins never collide with the eager loading.
+    query = (
+        Application.query.options(
+            joinedload(Application.drive).joinedload(Drive.company),
+            joinedload(Application.student),
+            joinedload(Application.offerLetter),
+        )
+        .join(Application.drive)
+        .join(Drive.company)
+        .join(Application.student)
     )
 
     if role == "student":
@@ -86,7 +103,7 @@ def list_applications():
         if company is None:
             return jsonify(message="No company profile for this account."), 403
         # An Application has no companyId — ownership runs through Drive.
-        query = query.join(Application.drive).filter(
+        query = query.filter(
             Drive.companyId == company.id,
             Application.status.notin_(HIDDEN_FROM_COMPANY),
         )
@@ -94,11 +111,29 @@ def list_applications():
     elif role != "admin":
         return jsonify(message="Forbidden"), 403
 
-    applications = query.order_by(Application.appliedAt.desc()).all()
+    query = search(query, [Drive.title, Company.name, Student.name, Student.rollNumber])
+    query = enum_filter(query, Application.status, ApplicationStatus)
+    query = sort(
+        query,
+        {
+            "studentName": Student.name,
+            "rollNumber": Student.rollNumber,
+            "cgpa": Student.cgpa,
+            "driveTitle": Drive.title,
+            "companyName": Company.name,
+            "appliedAt": Application.appliedAt,
+            "interviewScheduledAt": Application.interviewScheduledAt,
+            "status": Application.status,
+        },
+        default=(Application.appliedAt.desc(), Application.id.desc()),
+    )
+
+    applications, meta = paginate(query)
 
     return jsonify(
         items=[serialize_application(a, role) for a in applications],
         capabilities=capabilities_for(role),
+        **meta,
     ), 200
 
 

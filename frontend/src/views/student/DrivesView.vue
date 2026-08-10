@@ -1,44 +1,28 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref } from 'vue'
 import DataTable from '@/components/common/DataTable.vue'
 import ModalDialog from '@/components/common/ModalDialog.vue'
-import { useTableFilters } from '@/composables/useTableFilters'
+import { useServerTable } from '@/composables/useServerTable'
 import { applyToDrive } from '@/services/applications'
 import { fetchDrives } from '@/services/drives'
 
 const columns = [
-  { key: 'title', label: 'Role' },
-  { key: 'companyName', label: 'Company' },
-  { key: 'jobType', label: 'Type', width: '130px' },
-  { key: 'minCgpa', label: 'Min CGPA', width: '100px' },
-  { key: 'salary', label: 'Salary', width: '110px' },
-  { key: 'applicationDeadline', label: 'Closes', width: '140px' },
+  { key: 'title', label: 'Role' , sortable: true },
+  { key: 'companyName', label: 'Company' , sortable: true },
+  { key: 'jobType', label: 'Type', width: '130px' , sortable: true },
+  { key: 'minCgpa', label: 'Min CGPA', width: '100px' , sortable: true },
+  { key: 'salary', label: 'Salary', width: '110px' , sortable: true },
+  { key: 'applicationDeadline', label: 'Closes', width: '140px' , sortable: true , type: 'date' },
   { key: 'eligible', label: 'Match', width: '150px' },
 ]
 
-const rows = ref([])
-const loading = ref(false)
-const error = ref('')
-
-const { apply, isFiltered } = useTableFilters({ searchKeys: ['title', 'companyName', 'jobType'] })
-const visibleRows = computed(() => apply(rows.value))
+const { rows, capabilities, total, page, perPage, loading, error, isFiltered, sortKey, sortDir, load, setPage, setSort } =
+  useServerTable(fetchDrives)
 
 const applying = ref(null)
 
 const busy = ref(false)
 
-async function load() {
-  loading.value = true
-  error.value = ''
-  try {
-    const data = await fetchDrives()
-    rows.value = data.items
-  } catch (err) {
-    error.value = err.response?.data?.message ?? 'Could not load open drives.'
-  } finally {
-    loading.value = false
-  }
-}
 
 /*
   `alreadyApplied` comes from the drives serializer — the UniqueConstraint on
@@ -60,7 +44,6 @@ async function confirmApply() {
   }
 }
 
-onMounted(load)
 </script>
 
 <template>
@@ -68,10 +51,17 @@ onMounted(load)
 
     <DataTable
       :columns="columns"
-      :rows="visibleRows"
+      :rows="rows"
       :loading="loading"
       :error="error"
+      :total="total"
+      :page="page"
+      :per-page="perPage"
       :empty-text="isFiltered ? 'No drives match the current filters.' : 'No open drives right now.'"
+      :sort="sortKey"
+      :dir="sortDir"
+      @update:page="setPage"
+      @update:sort="setSort"
     >
       <template #cell-skillsRequired="{ value }">
         <span v-for="skill in value ?? []" :key="skill" class="skill">{{ skill }}</span>
