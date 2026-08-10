@@ -1,0 +1,1839 @@
+info:
+  description: 'REST API for the Placement Portal. Three roles — admin, company and student
+    — share most endpoints; the response is shaped by the role in the caller''s JWT, which
+    is why several schemas below mark fields as visible to only some roles.
+
+
+    Every list response carries a `capabilities` block describing which actions are available
+    and from which states, so a client renders its controls from the response instead of duplicating
+    the rules.
+
+
+    Generated from the live Flask url_map by `backend/gen_api_spec.py`.'
+  contact:
+    name: Christiano Fernandes
+  title: Placement Portal Application — V2
+  version: 2.0.0
+servers:
+- url: http://localhost:5001
+  description: Local development
+tags:
+- name: auth
+  description: Registration, sign-in and the current account
+- name: drives
+  description: Placement drives and the recruiter directory
+- name: applications
+  description: Applying, status changes and offer letters
+- name: profile
+  description: Student and company profiles
+- name: resumes
+  description: Resume upload and controlled read
+- name: admin
+  description: Account moderation and the registers
+- name: analytics
+  description: Dashboard counts and charts
+- name: exports
+  description: Asynchronous CSV exports
+- name: notifications
+  description: In-app notifications
+- name: ats
+  description: Resume screener
+security:
+- bearerAuth: []
+paths:
+  /api/admin/analytics:
+    get:
+      tags:
+      - analytics
+      summary: Institute-wide charts
+      description: Cached for 300s. Placements come from the placement register, so the monthly
+        series is exact; the other stages reflect only each application's latest state.
+      responses:
+        '200':
+          description: Series and breakdowns
+        '401':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/admin/companies:
+    get:
+      tags:
+      - admin
+      summary: The company account register
+      parameters:
+      - $ref: '#/components/parameters/PageParam'
+      - $ref: '#/components/parameters/PerPageParam'
+      - $ref: '#/components/parameters/SearchParam'
+      - $ref: '#/components/parameters/SortParam'
+      - $ref: '#/components/parameters/DirParam'
+      - $ref: '#/components/parameters/StatusParam'
+      responses:
+        '200':
+          description: Companies
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ListEnvelope'
+                - type: object
+                  properties:
+                    items:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/Company'
+        '401':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/admin/companies/{company_id}:
+    patch:
+      tags:
+      - admin
+      summary: Approve, reject or blacklist a company
+      description: accountStatus is a one-time decision made while the account is pending;
+        blackListed is a toggle valid from any state.
+      parameters:
+      - in: path
+        name: company_id
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accountStatus:
+                  type: string
+                  enum:
+                  - approved
+                  - rejected
+                blackListed:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Company'
+        '400':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/admin/stats:
+    get:
+      tags:
+      - analytics
+      summary: Admin dashboard counts
+      description: 'Deliberately uncached: these include queues an admin is about to act on,
+        and a stale queue invites clicking something that has already moved.'
+      responses:
+        '200':
+          description: Counts
+        '401':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/admin/students:
+    get:
+      tags:
+      - admin
+      summary: The student register
+      description: Search covers name, roll number, email and phone.
+      parameters:
+      - $ref: '#/components/parameters/PageParam'
+      - $ref: '#/components/parameters/PerPageParam'
+      - $ref: '#/components/parameters/SearchParam'
+      - $ref: '#/components/parameters/SortParam'
+      - $ref: '#/components/parameters/DirParam'
+      responses:
+        '200':
+          description: Students
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ListEnvelope'
+                - type: object
+                  properties:
+                    items:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/Student'
+        '401':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/admin/students/{student_id}:
+    patch:
+      tags:
+      - admin
+      summary: Blacklist or restore a student
+      description: Students register approved, so the blacklist is the only lever here.
+      parameters:
+      - in: path
+        name: student_id
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                blackListed:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Student'
+        '400':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/applications:
+    get:
+      tags:
+      - applications
+      summary: List applications, scoped by role
+      description: One endpoint, three audiences. A student sees their own; a company sees
+        applications to its own drives, excluding withdrawn ones; an admin sees everything.
+        The caller never states who it is — the role comes from the token.
+      parameters:
+      - $ref: '#/components/parameters/PageParam'
+      - $ref: '#/components/parameters/PerPageParam'
+      - $ref: '#/components/parameters/SearchParam'
+      - $ref: '#/components/parameters/SortParam'
+      - $ref: '#/components/parameters/DirParam'
+      - $ref: '#/components/parameters/StatusParam'
+      responses:
+        '200':
+          description: Applications
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ListEnvelope'
+                - type: object
+                  properties:
+                    items:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/Application'
+        '401':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags:
+      - applications
+      summary: Apply to a drive
+      description: 'Checks, in order: the drive exists and is approved (404), its deadline
+        has not passed (409), the student meets every stated criterion (403), and they have
+        not already applied (409, enforced by a unique constraint on student+drive so a revoked
+        row still blocks re-applying).'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - driveId
+              properties:
+                driveId:
+                  type: integer
+      responses:
+        '201':
+          description: Applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+        '400':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Ineligible; `reasons` lists which criteria were missed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Deadline passed, or already applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/applications/{application_id}:
+    patch:
+      tags:
+      - applications
+      summary: Update status, feedback or interview date
+      description: Company and admin only. A company may set shortlisted, interview, offer
+        or rejected — never placed, because only the student can accept.
+      parameters:
+      - in: path
+        name: application_id
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum:
+                  - shortlisted
+                  - interview
+                  - offer
+                  - rejected
+                feedback:
+                  type: string
+                interviewScheduledAt:
+                  type: string
+                  format: date-time
+                  nullable: true
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+        '400':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Not a legal transition from the current state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/applications/{application_id}/offer-letter:
+    post:
+      tags:
+      - applications
+      summary: Issue an offer letter
+      description: Snapshots the role, type, location and salary as they stand now. Re-issuing
+        is a 409, not a second letter.
+      parameters:
+      - in: path
+        name: application_id
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                joiningDate:
+                  type: string
+                  format: date
+                  nullable: true
+      responses:
+        '201':
+          description: Issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      tags:
+      - applications
+      summary: Download the offer letter
+      description: Rendered from a Jinja2 template and served as an HTML attachment.
+      parameters:
+      - in: path
+        name: application_id
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: The letter
+          content:
+            text/html:
+              schema:
+                type: string
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/applications/{application_id}/respond:
+    post:
+      tags:
+      - applications
+      summary: Accept or decline an offer
+      description: The student's decision alone. Accepting sets the status to placed and writes
+        a row into the placement register, copying the agreed position and salary so later
+        edits to the drive cannot rewrite history.
+      parameters:
+      - in: path
+        name: application_id
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - decision
+              properties:
+                decision:
+                  type: string
+                  enum:
+                  - accept
+                  - decline
+      responses:
+        '200':
+          description: Answered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+        '400':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: There is no open offer to respond to
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/applications/{application_id}/revoke:
+    post:
+      tags:
+      - applications
+      summary: Withdraw an application
+      description: Student or admin, and only while the application is still applied or shortlisted
+        — once anyone has committed time to it, the row is frozen. The row is kept, not deleted,
+        so the student cannot re-apply.
+      parameters:
+      - in: path
+        name: application_id
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Withdrawn
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/ats/screen:
+    post:
+      tags:
+      - ats
+      summary: Screen a resume against a drive
+      description: Keyword match between pasted resume text and the drive's required skills.
+        A company may only screen against its own drives. A drive listing no skills returns
+        a null score rather than 0%, which would read as a bad resume.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - driveId
+              - resumeText
+              properties:
+                driveId:
+                  type: integer
+                resumeText:
+                  type: string
+                  maxLength: 20000
+      responses:
+        '200':
+          description: Result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  driveTitle:
+                    type: string
+                  score:
+                    type: integer
+                    nullable: true
+                  matched:
+                    type: array
+                    items:
+                      type: string
+                  missing:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/auth/login:
+    post:
+      security: []
+      tags:
+      - auth
+      summary: Sign in
+      description: Returns a JWT carrying the role as a signed claim. Blacklisted and rejected
+        accounts are refused; a PENDING company may sign in and read, but every write re-checks
+        the live account row.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - userName
+              - password
+              properties:
+                userName:
+                  type: string
+                  example: admin
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/auth/me:
+    get:
+      tags:
+      - auth
+      summary: The current account, read live
+      description: Read from the database, not the token — an admin approving an account cannot
+        change a JWT that was already issued.
+      responses:
+        '200':
+          description: Account
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userName:
+                    type: string
+                  role:
+                    type: string
+                  accountStatus:
+                    type: string
+                  blackListed:
+                    type: boolean
+        '401':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/auth/register/company:
+    post:
+      security: []
+      tags:
+      - auth
+      summary: Register a company
+      description: Created PENDING. The account can sign in and look around straight away
+        but cannot post a drive until an admin approves it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - userName
+              - password
+              - name
+              - industry
+              - hrContactName
+              - hrContactEmail
+              - website
+              properties:
+                userName:
+                  type: string
+                password:
+                  type: string
+                  format: password
+                name:
+                  type: string
+                industry:
+                  type: string
+                location:
+                  type: string
+                hrContactName:
+                  type: string
+                hrContactEmail:
+                  type: string
+                  format: email
+                website:
+                  type: string
+      responses:
+        '201':
+          description: Registered, awaiting approval
+        '400':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: A unique field is already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/auth/register/student:
+    post:
+      security: []
+      tags:
+      - auth
+      summary: Register as a student
+      description: Students are APPROVED on creation and may sign in immediately.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - userName
+              - password
+              - name
+              - email
+              - phoneNumber
+              - rollNumber
+              - branch
+              - yearStudy
+              - cgpa
+              properties:
+                userName:
+                  type: string
+                password:
+                  type: string
+                  format: password
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                phoneNumber:
+                  type: string
+                  pattern: ^[0-9]{10}$
+                rollNumber:
+                  type: string
+                branch:
+                  type: string
+                yearStudy:
+                  type: string
+                gradeYear:
+                  type: integer
+                cgpa:
+                  type: number
+                  minimum: 0
+                  maximum: 10
+      responses:
+        '201':
+          description: Registered
+        '400':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: A unique field is already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/companies:
+    get:
+      tags:
+      - drives
+      summary: The recruiter directory
+      description: 'Students only. Approved, non-blacklisted companies with a count of their
+        open drives. Carries no account status: a rejected company appearing here would read
+        as an endorsement.'
+      parameters:
+      - $ref: '#/components/parameters/PageParam'
+      - $ref: '#/components/parameters/PerPageParam'
+      - $ref: '#/components/parameters/SearchParam'
+      - $ref: '#/components/parameters/SortParam'
+      - $ref: '#/components/parameters/DirParam'
+      responses:
+        '200':
+          description: Companies
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ListEnvelope'
+                - type: object
+                  properties:
+                    items:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/Company'
+        '401':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/company/analytics:
+    get:
+      tags:
+      - analytics
+      summary: This company's charts
+      description: Cached for 300s, keyed per company.
+      responses:
+        '200':
+          description: Series and breakdowns
+        '401':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/company/profile:
+    get:
+      tags:
+      - profile
+      summary: My company profile
+      responses:
+        '200':
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Company'
+        '401':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      tags:
+      - profile
+      summary: Update my company profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Company'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Company'
+        '400':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/company/stats:
+    get:
+      tags:
+      - analytics
+      summary: Company dashboard counts
+      responses:
+        '200':
+          description: Counts
+        '401':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/drives:
+    get:
+      tags:
+      - drives
+      summary: List drives, scoped by role
+      description: Students see approved drives whose deadline has not passed, annotated with
+        their own eligibility; companies see their own postings in every state; admins see
+        all. Search covers title, company name and required skills.
+      parameters:
+      - $ref: '#/components/parameters/PageParam'
+      - $ref: '#/components/parameters/PerPageParam'
+      - $ref: '#/components/parameters/SearchParam'
+      - $ref: '#/components/parameters/SortParam'
+      - $ref: '#/components/parameters/DirParam'
+      - $ref: '#/components/parameters/StatusParam'
+      - in: query
+        name: applied
+        schema:
+          type: string
+          enum:
+          - 'yes'
+          - 'no'
+        description: Student only.
+      - in: query
+        name: maxCgpa
+        schema:
+          type: number
+        description: Student only. Drives asking at most this. Drives with no minimum always
+          qualify.
+      responses:
+        '200':
+          description: Drives
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ListEnvelope'
+                - type: object
+                  properties:
+                    items:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/Drive'
+        '401':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags:
+      - drives
+      summary: Post a drive
+      description: Approved companies only — a pending company gets 403. Created PENDING,
+        so an admin approves the posting separately from the account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Drive'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Drive'
+        '400':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/drives/{drive_id}:
+    get:
+      tags:
+      - drives
+      summary: One drive
+      parameters:
+      - in: path
+        name: drive_id
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Drive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Drive'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      tags:
+      - drives
+      summary: Edit a drive, or close it
+      description: A company may edit while pending or approved, and close an approved one.
+        An admin approves or rejects; rejection maps to closed, since the posting stays on
+        record but nobody can apply.
+      parameters:
+      - in: path
+        name: drive_id
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Drive'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Drive'
+        '400':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/exports/applications:
+    post:
+      tags:
+      - exports
+      summary: Start a CSV export
+      description: '202, not 200: the request was accepted but the file does not exist yet.
+        The role decides which export runs — a student gets their own history, a company gets
+        every applicant across its drives. Requires a running Celery worker.'
+      responses:
+        '202':
+          description: Queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  taskId:
+                    type: string
+        '401':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/exports/{task_id}:
+    get:
+      tags:
+      - exports
+      summary: Poll an export
+      description: PENDING means 'no record of this id' as much as 'queued' — Celery writes
+        nothing until a task starts, so the two are indistinguishable.
+      parameters:
+      - in: path
+        name: task_id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: State
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  state:
+                    type: string
+                    enum:
+                    - PENDING
+                    - STARTED
+                    - SUCCESS
+                    - FAILURE
+                  rows:
+                    type: integer
+        '401':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/exports/{task_id}/file:
+    get:
+      tags:
+      - exports
+      summary: Download a finished export
+      description: Ownership is proved from the task's own return value, which carries the
+        userId that asked for it — so another account cannot read an export by guessing a
+        task id.
+      parameters:
+      - in: path
+        name: task_id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The CSV
+          content:
+            text/csv:
+              schema:
+                type: string
+        '401':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/notifications:
+    get:
+      tags:
+      - notifications
+      summary: My notifications
+      responses:
+        '200':
+          description: Notifications
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Notification'
+                  unread:
+                    type: integer
+        '401':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/notifications/read:
+    post:
+      tags:
+      - notifications
+      summary: Mark everything read
+      responses:
+        '200':
+          description: Marked
+        '401':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/public/stats:
+    get:
+      security: []
+      tags:
+      - analytics
+      summary: Public landing dashboard
+      description: The only unauthenticated data endpoint. Aggregate counts and posting properties
+        only — no salary figures, no branch breakdowns, nothing attributable to a person.
+      responses:
+        '200':
+          description: Aggregate stats
+  /api/student/profile:
+    get:
+      tags:
+      - profile
+      summary: My student profile
+      responses:
+        '200':
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Student'
+        '401':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      tags:
+      - profile
+      summary: Update my student profile
+      description: 'rollNumber is absent by design: it identifies the student to the institute.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Student'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Student'
+        '400':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/student/resume:
+    post:
+      tags:
+      - resumes
+      summary: Upload my resume
+      description: PDF only, 2 MB maximum. Validated on magic bytes, not the extension. Stored
+        under a filename derived from the student id, so re-uploading replaces it.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Uploaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  resumeUploadedAt:
+                    type: string
+                    format: date-time
+        '400':
+          description: Not a PDF, or no file given
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: Larger than 2 MB
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+      - resumes
+      summary: Remove my resume
+      description: 'Idempotent: removing when none is on file still returns 200.'
+      responses:
+        '200':
+          description: Removed
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/student/stats:
+    get:
+      tags:
+      - analytics
+      summary: Student dashboard counts
+      responses:
+        '200':
+          description: Counts
+        '401':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/students/{student_id}/resume:
+    get:
+      tags:
+      - resumes
+      summary: Read a student's resume
+      description: A student may read their own and an admin any, but a company may read one
+        ONLY for a student who has a live application to one of its own drives — otherwise
+        the id range would be a way to harvest every resume in the portal.
+      parameters:
+      - in: path
+        name: student_id
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: The PDF, served inline
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '403':
+          description: Not permitted to read this resume
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No resume on file
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+openapi: 3.0.3
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Application not found.
+        errors:
+          type: object
+          additionalProperties:
+            type: string
+          description: Present on validation failures; keyed by field name.
+    ListEnvelope:
+      type: object
+      description: Every list endpoint returns this shape. `capabilities` describes which
+        actions the caller may take and from which states, so the client renders buttons from
+        the response rather than hard-coding rules.
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        capabilities:
+          type: object
+        page:
+          type: integer
+          example: 1
+        perPage:
+          type: integer
+          example: 25
+        total:
+          type: integer
+          example: 276
+    Application:
+      type: object
+      description: Shaped by the caller's role. Students see their own row; companies and
+        admins additionally see the candidate's identity, CGPA, resume presence and whether
+        they applied outside the stated criteria; admins also see joiningDate and finalSalary.
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+          enum:
+          - applied
+          - shortlisted
+          - interview
+          - offer
+          - placed
+          - rejected
+          - declined
+          - revoked
+        appliedAt:
+          type: string
+          format: date-time
+        statusUpdatedAt:
+          type: string
+          format: date-time
+        interviewScheduledAt:
+          type: string
+          format: date-time
+          nullable: true
+        feedback:
+          type: string
+          nullable: true
+        driveId:
+          type: integer
+        driveTitle:
+          type: string
+        companyName:
+          type: string
+        offerLetterIssuedAt:
+          type: string
+          format: date-time
+          nullable: true
+        studentId:
+          type: integer
+          description: company/admin only
+        studentName:
+          type: string
+          description: company/admin only
+        rollNumber:
+          type: string
+          description: company/admin only
+        branch:
+          type: string
+          description: company/admin only
+        cgpa:
+          type: number
+          description: company/admin only
+        email:
+          type: string
+          description: company/admin only
+        belowCriteria:
+          type: boolean
+          description: company/admin only
+        criteriaMissed:
+          type: array
+          items:
+            type: string
+          description: company/admin only
+        resumeUploadedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: company/admin only; presence enables the resume link
+        joiningDate:
+          type: string
+          format: date
+          description: admin only
+        finalSalary:
+          type: number
+          description: admin only
+    Drive:
+      type: object
+      description: Students additionally receive `alreadyApplied`, `eligible` and `ineligibleReasons`;
+        companies and admins receive `applicationCount`.
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        jobType:
+          type: string
+          enum:
+          - full_time
+          - internship
+          - ppo
+        branch:
+          type: string
+          nullable: true
+          description: null = open to all
+        minCgpa:
+          type: number
+          nullable: true
+        eligibleYear:
+          type: integer
+          nullable: true
+        skillsRequired:
+          type: array
+          items:
+            type: string
+        experienceRequired:
+          type: string
+          nullable: true
+        benefits:
+          type: string
+          nullable: true
+        salary:
+          type: number
+          nullable: true
+        numOpenings:
+          type: integer
+          nullable: true
+        applicationDeadline:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+          enum:
+          - pending
+          - approved
+          - closed
+        companyName:
+          type: string
+        applicationCount:
+          type: integer
+          description: company/admin only
+        alreadyApplied:
+          type: boolean
+          description: student only
+        eligible:
+          type: boolean
+          description: student only
+        ineligibleReasons:
+          type: array
+          items:
+            type: string
+          description: student only; why they fall outside the criteria
+    Student:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        phoneNumber:
+          type: string
+        rollNumber:
+          type: string
+          description: set by the institute, not editable
+        branch:
+          type: string
+        yearStudy:
+          type: string
+        gradeYear:
+          type: integer
+          nullable: true
+        cgpa:
+          type: number
+        links:
+          type: object
+          additionalProperties:
+            type: string
+        skills:
+          type: array
+          items:
+            type: string
+        experience:
+          type: string
+          nullable: true
+        resumeUploadedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: presence only; the stored filename is never returned
+        userName:
+          type: string
+        accountStatus:
+          type: string
+          enum:
+          - pending
+          - approved
+          - rejected
+        blackListed:
+          type: boolean
+          description: admin only
+    Company:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        industry:
+          type: string
+        location:
+          type: string
+          nullable: true
+        hrContactName:
+          type: string
+        hrContactEmail:
+          type: string
+          format: email
+        website:
+          type: string
+        userName:
+          type: string
+        accountStatus:
+          type: string
+          enum:
+          - pending
+          - approved
+          - rejected
+        blackListed:
+          type: boolean
+          description: admin only
+        openDrives:
+          type: integer
+          description: student directory only
+    Session:
+      type: object
+      properties:
+        access_token:
+          type: string
+        role:
+          type: string
+          enum:
+          - admin
+          - company
+          - student
+        userName:
+          type: string
+        accountStatus:
+          type: string
+          enum:
+          - pending
+          - approved
+          - rejected
+    Notification:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        body:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        read:
+          type: boolean
+  parameters:
+    PageParam:
+      in: query
+      name: page
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: 1-indexed. Out-of-range pages return an empty items array.
+    PerPageParam:
+      in: query
+      name: perPage
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+      description: Clamped server-side to 100.
+    SearchParam:
+      in: query
+      name: search
+      schema:
+        type: string
+      description: Case-insensitive substring match across that list's searchable columns.
+    SortParam:
+      in: query
+      name: sort
+      schema:
+        type: string
+      description: A whitelisted key, not a column name. Unknown keys fall back to the default
+        ordering rather than erroring.
+    DirParam:
+      in: query
+      name: dir
+      schema:
+        type: string
+        enum:
+        - asc
+        - desc
+        default: asc
+    StatusParam:
+      in: query
+      name: status
+      schema:
+        type: string
+      description: Filter by status. An unrecognised value is ignored, not rejected.
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
