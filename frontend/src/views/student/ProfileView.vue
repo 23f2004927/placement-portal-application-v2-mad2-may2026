@@ -71,7 +71,7 @@ async function handleSubmit() {
 
 <template>
   <div>
-    <BForm class="profile-form" @submit.prevent="handleSubmit">
+    <BForm v-trim class="profile-form" @submit.prevent="handleSubmit">
       <BAlert v-if="errorMsg" :model-value="true" variant="danger">{{ errorMsg }}</BAlert>
       <BAlert v-if="savedMsg" :model-value="true" variant="success">{{ savedMsg }}</BAlert>
 

@@ -9,12 +9,17 @@ import App from './App.vue'
 import router from './router'
 import api from './services/api'
 import { useAuth } from './stores/auth'
+import { vTrim } from './directives/trim'
 
 const app = createApp(App)
 
 app.use(createPinia())
 app.use(createBootstrap())
 app.use(router)
+
+// Used as v-trim on a <form>; see directives/trim.js for why it lives there
+// and not on each input.
+app.directive('trim', vTrim)
 
 /*
   Registered here rather than in services/api.js: that module is imported by
@@ -45,5 +50,18 @@ api.interceptors.response.use(
     return Promise.reject(error)
   },
 )
+
+/*
+  PWA. Registered after load so it never competes with the first paint, and only
+  in a production build — a service worker caching assets in front of Vite's dev
+  server makes hot reload behave unpredictably.
+*/
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      /* offline support is a bonus; never block the app on it */
+    })
+  })
+}
 
 app.mount('#app')

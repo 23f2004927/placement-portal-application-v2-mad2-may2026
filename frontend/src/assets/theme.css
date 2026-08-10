@@ -44,10 +44,27 @@ body {
 }
 
 /* Once the cap bites, a hairline keeps the app reading as a deliberate frame
-   rather than content that failed to fill the screen. */
-@media (min-width: 1441px) {
+   rather than content that failed to fill the screen. The breakpoint must match
+   --app-max, or the border appears on screens the cap hasn't reached yet. */
+@media (min-width: 2160px) {
   #app {
     border-inline: 1px solid var(--border);
+  }
+}
+
+/* Mobile: reclaim the padding that framed these panels on a desktop.
+   Scoped styles can't reach into other components, so the shared surfaces are
+   adjusted once here rather than in every view. */
+@media (max-width: 575px) {
+  .card,
+  .profile-form,
+  .drive-form,
+  .register-card {
+    padding: 20px 16px !important;
+  }
+
+  .btn {
+    padding: 10px 18px;
   }
 }
 

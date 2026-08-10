@@ -90,7 +90,7 @@ function cancel() {
 
 <template>
   <div>
-    <BForm class="drive-form" @submit.prevent="handleSubmit">
+    <BForm v-trim class="drive-form" @submit.prevent="handleSubmit">
       <BAlert v-if="errorMsg" :model-value="true" variant="danger">{{ errorMsg }}</BAlert>
 
       <BRow class="g-2">

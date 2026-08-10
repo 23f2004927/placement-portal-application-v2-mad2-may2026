@@ -1,5 +1,6 @@
 <script setup>
 import { useAuth } from '@/stores/auth'
+import InstallButton from '@/components/common/InstallButton.vue'
 
 /*
   Public-facing top bar.
@@ -20,6 +21,7 @@ const auth = useAuth()
 
 const items = [
   { key: 'home', label: 'Home' },
+  { key: 'stats', label: 'Placements' },
   { key: 'about', label: 'About' },
   { key: 'contact', label: 'Contact' },
 ]
@@ -34,6 +36,7 @@ const items = [
       </button>
 
       <nav class="nav-items" @mouseleave="emit('preview', null)">
+        <InstallButton />
         <button
           v-for="item in items"
           :key="item.key"

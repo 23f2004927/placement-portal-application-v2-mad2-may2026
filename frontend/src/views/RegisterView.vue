@@ -117,7 +117,7 @@ async function handleSubmit() {
           class="role-toggle mb-3"
         />
 
-        <BForm @submit.prevent="handleSubmit">
+        <BForm v-trim @submit.prevent="handleSubmit">
           <BAlert v-if="errorMsg" :model-value="true" variant="danger">{{ errorMsg }}</BAlert>
 
           <!-- Shared account credentials -->

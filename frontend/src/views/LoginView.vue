@@ -31,7 +31,7 @@ async function handleSubmit() {
       <h2 class="text-center fw-bold text-uppercase mb-1">Portal Login</h2>
       <p class="text-center subtitle mb-4">Please sign in to access your account.</p>
 
-      <BForm @submit.prevent="handleSubmit">
+      <BForm v-trim @submit.prevent="handleSubmit">
 
         <BAlert v-if="errorMsg" :model-value="true" variant="danger">{{ errorMsg }}</BAlert>
 
@@ -64,19 +64,28 @@ async function handleSubmit() {
 
 <style scoped>
 .login-page {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   justify-content: center;
   align-items: center;
+  padding: 24px 16px;
   background: var(--bg);
 }
 
-.login-card{
-    width:420px;
-    padding:48px;
+/* width + max-width, not a fixed width: 420px alone overflows a 360px phone. */
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 48px;
 }
 
-.form-group{
-    margin-bottom:24px;
+.form-group {
+  margin-bottom: 24px;
+}
+
+@media (max-width: 575px) {
+  .login-card {
+    padding: 28px 20px;
+  }
 }
 </style>

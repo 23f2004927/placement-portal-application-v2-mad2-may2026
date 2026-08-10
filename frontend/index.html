@@ -1,10 +1,23 @@
 <!DOCTYPE html>
-<html lang="">
+<html lang="en">
   <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+    <title>Placement Portal</title>
+    <meta name="description" content="Campus placement portal for students, companies and the placement office.">
+
+    <!-- PWA: the manifest is what makes "Add to Home Screen" offer a real app
+         icon and a standalone window rather than a browser bookmark. -->
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#5551c6">
+
     <link rel="icon" href="/favicon.ico">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vite App</title>
+    <!-- iOS ignores the manifest for home-screen icons and reads these instead. -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Placement">
   </head>
   <body>
     <div id="app"></div>

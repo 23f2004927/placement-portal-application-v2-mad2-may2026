@@ -4,6 +4,13 @@ from flask_jwt_extended import jwt_required
 
 from app.extensions import db,IntegrityError
 from app.utils.errors import unique_conflict
+from app.utils.validation import (
+    check_email,
+    check_number,
+    check_password,
+    check_phone,
+    clean_payload,
+)
 from app.models import AccountStatus, Role, Student, User, Branch,Company
 from app.utils.identity import current_user_id
 
@@ -14,7 +21,10 @@ auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
 @auth_bp.route("/login", methods=["POST"])
 def login():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
+    if not data.get("userName") or not data.get("password"):
+        return jsonify(message="Username and password are required."), 400
+
     # 1. look up by userName
     user = User.query.filter_by(userName=data["userName"]).first()
 
@@ -68,7 +78,25 @@ def me():
 @auth_bp.route("/register/student", methods=["POST"])
 def register_student():
 
-    data = request.get_json()
+    data, errors = clean_payload(
+        request.get_json(silent=True),
+        required=(
+            "userName", "password", "name", "email",
+            "phoneNumber", "rollNumber", "branch", "yearStudy", "cgpa",
+        ),
+        optional=("gradeYear",),
+    )
+    check_email(data, errors, "email")
+    check_phone(data, errors, "phoneNumber")
+    check_password(data, errors)
+    check_number(data, errors, "cgpa", float, low=0, high=10)
+    check_number(data, errors, "gradeYear", int, low=1900, high=2100)
+
+    if data.get("branch") and data["branch"] not in {b.value for b in Branch}:
+        errors["branch"] = "Choose a branch from the list."
+
+    if errors:
+        return jsonify(message="Please correct the highlighted fields.", errors=errors), 400
 
     user = User(
         userName=data["userName"],
@@ -88,10 +116,10 @@ def register_student():
             email=data["email"],
             phoneNumber=data["phoneNumber"],
             rollNumber=data["rollNumber"],
-            branch = Branch(data["branch"]),
+            branch=Branch(data["branch"]),
             yearStudy=data["yearStudy"],
-            gradeYear = int(data["gradeYear"]) if data.get("gradeYear") else None,
-            cgpa = float(data["cgpa"]),
+            gradeYear=data.get("gradeYear"),
+            cgpa=data["cgpa"],
         )
         db.session.add(student)
         db.session.commit()
@@ -113,7 +141,19 @@ def register_student():
 @auth_bp.route("/register/company", methods=["POST"])
 def register_company():
 
-    data = request.get_json()
+    data, errors = clean_payload(
+        request.get_json(silent=True),
+        required=(
+            "userName", "password", "name", "industry",
+            "hrContactName", "hrContactEmail", "website",
+        ),
+        optional=("location",),
+    )
+    check_email(data, errors, "hrContactEmail")
+    check_password(data, errors)
+
+    if errors:
+        return jsonify(message="Please correct the highlighted fields.", errors=errors), 400
 
     user = User(
         userName=data["userName"],
@@ -130,8 +170,8 @@ def register_company():
         company = Company(
             userId=user.id,
             name=data["name"],
-            industry = data["industry"],
-            location = data["location"] if data.get("location") else None,
+            industry=data["industry"],
+            location=data.get("location"),
             hrContactEmail=data["hrContactEmail"],
             hrContactName=data["hrContactName"],
             website=data["website"],
