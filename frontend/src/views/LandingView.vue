@@ -2,6 +2,7 @@
 import { computed, ref, onMounted } from 'vue'
 import PublicNavbar from '@/components/layout/PublicNavbar.vue';
 import ChartCard from '@/components/common/ChartCard.vue'
+import CardCarousel from '@/components/common/CardCarousel.vue'
 import { site } from '@/config/site'
 import { fetchPublicStats } from '@/services/analytics'
 
@@ -60,15 +61,62 @@ onMounted(async () => {
   }
 })
 
-const publicTiles = computed(() => [
-  { label: 'Students registered', value: stats.value?.students },
-  { label: 'Companies hiring', value: stats.value?.companies },
-  { label: 'Drives open now', value: stats.value?.openDrives },
-  { label: 'Students placed', value: stats.value?.placed },
+/*
+  Tiles come in groups of four and the groups are carouselled, so the panel
+  never grows a scrollbar however many we add.
+*/
+const tileGroups = computed(() => [
+  [
+    { label: 'Students registered', value: stats.value?.students },
+    { label: 'Companies hiring', value: stats.value?.companies },
+    { label: 'Drives open now', value: stats.value?.openDrives },
+    { label: 'Students placed', value: stats.value?.placed },
+  ],
+  [
+    { label: 'Drives posted', value: stats.value?.drivesPosted },
+    { label: 'Applications received', value: stats.value?.applicationsReceived },
+    { label: 'Industries hiring', value: stats.value?.industries },
+    { label: 'Distinct skills sought', value: stats.value?.skillsListed },
+  ],
 ])
 
-const placementSeries = computed(() => [
-  { label: 'Students placed', data: stats.value?.placements ?? [] },
+/*
+  Every chart here is a property of postings or a portal-wide count. No branch
+  breakdown, no salary figures, nothing per-company — see MILESTONES.md for why
+  those are deliberately absent from an unauthenticated page.
+*/
+const chartCards = computed(() => [
+  {
+    title: 'Activity',
+    subtitle: 'Applications received and students placed, last 6 months',
+    type: 'line',
+    labels: stats.value?.months ?? [],
+    series: [
+      { label: 'Applications', data: stats.value?.applications ?? [] },
+      { label: 'Placed', data: stats.value?.placements ?? [] },
+    ],
+  },
+  {
+    title: 'Drives posted',
+    subtitle: 'Cumulative, last 6 months',
+    type: 'line',
+    labels: stats.value?.months ?? [],
+    series: [{ label: 'Drives', data: stats.value?.drivesCumulative ?? [] }],
+  },
+  {
+    title: 'Skills in demand',
+    subtitle: 'How many drives ask for each skill',
+    horizontal: true,
+    labels: (stats.value?.topSkills ?? []).map((s) => s.skill),
+    series: [{ label: 'Drives asking', data: (stats.value?.topSkills ?? []).map((s) => s.count) }],
+  },
+  {
+    title: 'Types of role',
+    subtitle: 'Across open drives',
+    horizontal: true,
+    labels: (stats.value?.jobTypes ?? []).map((j) => j.jobType),
+    series: [{ label: 'Drives', data: (stats.value?.jobTypes ?? []).map((j) => j.count) }],
+  },
 ])
 </script>
 
@@ -108,24 +156,26 @@ const placementSeries = computed(() => [
             <!-- Placements: public, pre-login, aggregate only -->
             <template v-else-if="active === 'stats'">
               <p class="eyebrow">Placements</p>
-              <h1 class="panel-title">How the cycle is going.</h1>
+              <h1 class="panel-title is-compact">How the cycle is going.</h1>
 
-              <div class="public-tiles">
-                <div v-for="tile in publicTiles" :key="tile.label" class="tile">
-                  <span class="tile-value">{{ tile.value ?? '—' }}</span>
-                  <span class="tile-label">{{ tile.label }}</span>
-                </div>
-              </div>
+              <CardCarousel :items="tileGroups" label="totals">
+                <template #default="{ item }">
+                  <div class="public-tiles">
+                    <div v-for="tile in item" :key="tile.label" class="tile">
+                      <span class="tile-value">{{ tile.value ?? '—' }}</span>
+                      <span class="tile-label">{{ tile.label }}</span>
+                    </div>
+                  </div>
+                </template>
+              </CardCarousel>
 
-              <ChartCard
-                title="Students placed"
-                subtitle="Last 6 months"
-                :labels="stats?.months ?? []"
-                :series="placementSeries"
-                :height="200"
-              />
+              <CardCarousel :items="chartCards" label="chart" class="mt-3">
+                <template #default="{ item }">
+                  <ChartCard v-bind="item" :height="170" />
+                </template>
+              </CardCarousel>
 
-              <p class="panel-note">
+              <p class="panel-note is-tight">
                 Aggregate figures only. No student or company details are shown here.
               </p>
             </template>
@@ -266,6 +316,11 @@ const placementSeries = computed(() => [
   color: var(--text-muted);
 }
 
+.panel-note.is-tight {
+  margin-top: 12px;
+  font-size: 0.75rem;
+}
+
 .panel-note a {
   color: var(--primary);
   font-weight: 600;
@@ -273,18 +328,24 @@ const placementSeries = computed(() => [
 
 /* Public stats tiles */
 
+/* This panel carries the most content of the four, so its heading is toned
+   down to keep everything inside one screen without a scrollbar. */
+.panel-title.is-compact {
+  font-size: 1.75rem;
+  margin-bottom: 16px;
+}
+
 .public-tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 12px;
-  margin: 20px 0 16px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
 }
 
 .tile {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 14px 16px;
+  padding: 10px 14px;
   border: 1px solid var(--border);
   background: var(--surface);
 }
@@ -292,7 +353,7 @@ const placementSeries = computed(() => [
 /* Proportional figures, not tabular: these are standalone numbers, and
    equal-width digits read as loose at this size. */
 .tile-value {
-  font-size: 1.75rem;
+  font-size: 1.5rem;
   font-weight: 800;
   line-height: 1.1;
 }

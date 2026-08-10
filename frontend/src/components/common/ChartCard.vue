@@ -128,7 +128,9 @@ onUnmounted(() => chart.value?.destroy())
       <canvas ref="canvas" />
     </div>
 
-    <div v-if="showTable" class="chart-table">
+    <!-- Capped to the chart's own height so switching views never changes the
+         card size — which would push a carousel slide into scrolling. -->
+    <div v-if="showTable" class="chart-table" :style="{ maxHeight: `${height}px` }">
       <table class="table table-sm mb-0">
         <thead>
           <tr>
@@ -181,7 +183,7 @@ onUnmounted(() => chart.value?.destroy())
 }
 
 .chart-table {
-  overflow-x: auto;
+  overflow: auto;
   font-size: 0.8125rem;
 }
 

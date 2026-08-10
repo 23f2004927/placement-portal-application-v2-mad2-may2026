@@ -55,21 +55,47 @@ def _recent_months(count=MONTHS):
     return list(reversed(months))
 
 
-def _monthly(column, *filters):
+def _monthly(column, *filters, model=Application):
     """Counts grouped by YYYY-MM, zero-filled so the x-axis has no gaps.
 
     Zero-filling matters: without it a quiet month is missing rather than zero,
     and a line chart would join across the gap and imply activity that never
     happened.
+
+    `model` is keyword-only so the existing Application call sites are unchanged.
     """
     rows = (
-        db.session.query(func.strftime("%Y-%m", column), func.count(Application.id))
+        db.session.query(func.strftime("%Y-%m", column), func.count(model.id))
         .filter(*filters)
         .group_by(func.strftime("%Y-%m", column))
         .all()
     )
     found = dict(rows)
     return [found.get(m, 0) for m in _recent_months()]
+
+
+def _cumulative(values):
+    """Running total. A cumulative line only ever climbs, which is what makes
+    'is this portal growing' readable at a glance."""
+    total = 0
+    out = []
+    for v in values:
+        total += v
+        out.append(total)
+    return out
+
+
+def _job_type_mix():
+    rows = (
+        db.session.query(Drive.jobType, func.count(Drive.id))
+        .filter(Drive.status == DriveStatus.APPROVED)
+        .group_by(Drive.jobType)
+        .all()
+    )
+    return [
+        {"jobType": t.value.replace("_", " ") if t else "unspecified", "count": n}
+        for t, n in sorted(rows, key=lambda r: -r[1])
+    ]
 
 
 def _funnel(*filters):
@@ -305,7 +331,10 @@ def public_stats():
     traffic is unbounded."""
     payload = cache.get("public:stats")
     if payload is None:
+        drives_monthly = _monthly(Drive.createdAt, model=Drive)
+
         payload = {
+            # --- headline counts -------------------------------------------
             "students": db.session.query(func.count(Student.id)).scalar() or 0,
             "companies": db.session.query(func.count(Company.id))
             .join(User, Company.userId == User.id)
@@ -320,11 +349,29 @@ def public_stats():
             .filter(Application.status == ApplicationStatus.PLACED)
             .scalar()
             or 0,
+            # --- activity counts -------------------------------------------
+            "drivesPosted": db.session.query(func.count(Drive.id)).scalar() or 0,
+            "applicationsReceived": db.session.query(func.count(Application.id))
+            .filter(Application.status != ApplicationStatus.REVOKED)
+            .scalar()
+            or 0,
+            "industries": db.session.query(func.count(func.distinct(func.lower(Company.industry))))
+            .join(User, Company.userId == User.id)
+            .filter(User.accountStatus == AccountStatus.APPROVED)
+            .scalar()
+            or 0,
+            "skillsListed": len(_top_skills(limit=10_000)),
+            # --- series -----------------------------------------------------
             "months": _recent_months(),
+            "applications": _monthly(Application.appliedAt),
             "placements": _monthly(
                 Application.statusUpdatedAt,
                 Application.status == ApplicationStatus.PLACED,
             ),
+            "drivesCumulative": _cumulative(drives_monthly),
+            # --- breakdowns, both safe: properties of postings, not people ---
+            "topSkills": _top_skills(),
+            "jobTypes": _job_type_mix(),
         }
         cache.set("public:stats", payload, timeout=300)
 
